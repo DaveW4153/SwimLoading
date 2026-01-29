@@ -1,0 +1,163 @@
+# PRIVACY POLICY
+
+**Last Updated:** January 27, 2026
+
+SwimLoading ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and protect your personal information in compliance with the Protection of Personal Information Act (POPIA) of South Africa.
+
+## 1. INFORMATION WE COLLECT
+
+We collect the following personal information:
+
+**Account Information:**
+- Email address
+- Password (encrypted)
+- Display name
+- Full name
+- Phone number
+- Date of birth
+- Home address
+
+**Emergency Contact Information:**
+- Next of kin name and contact details
+- Relationship
+- Medical conditions and allergies
+
+**Swimming Data:**
+- Water temperature logs
+- Location data (GPS coordinates and beach names)
+- Swimming times and distances
+- Swim event participation
+- Swimming ability level
+- Cold tolerance preferences
+
+**Usage Data:**
+- Device information
+- IP address
+- Browser type
+- Usage patterns and preferences
+
+## 2. HOW WE USE YOUR INFORMATION
+
+We use your information for:
+
+**Safety Purposes:**
+- Emergency contact notification
+- Location tracking during swims
+- Medical information for emergency services
+
+**Service Delivery:**
+- Account creation and management
+- Swim event organization
+- Community features
+- Performance tracking
+
+**Communication:**
+- Service updates
+- Safety alerts
+- Swim event notifications
+- Community messages
+
+## 3. LEGAL BASIS FOR PROCESSING
+
+Under POPIA, we process your information based on:
+- Your explicit consent
+- Legitimate interests (safety and service delivery)
+- Contractual necessity
+- Legal obligations
+
+## 4. DATA SHARING
+
+We do NOT sell your personal information.
+
+We may share your information with:
+
+**Emergency Services:**
+- Police, ambulance, NSRI in case of emergency
+- Your designated emergency contact
+
+**Service Providers:**
+- Supabase (database hosting - EU servers)
+- Email service provider
+
+**Other Users:**
+- Display name and swimming activity (public)
+- Location and temperature logs (public)
+- Profile photo (if uploaded)
+
+Your emergency contact details and medical information remain PRIVATE.
+
+## 5. DATA STORAGE
+
+Your data is stored on Supabase servers located in the European Union. We implement industry-standard security measures including encryption and access controls.
+
+## 6. DATA RETENTION
+
+We retain your data:
+- Active accounts: For the lifetime of your account
+- Deleted accounts: 12 months after deletion (for legal compliance)
+- Anonymized data: Indefinitely for statistical purposes
+
+## 7. YOUR RIGHTS UNDER POPIA
+
+You have the right to:
+
+✓ **Access:** Request a copy of your personal data
+✓ **Correction:** Update incorrect or incomplete data
+✓ **Deletion:** Request deletion of your account and data
+✓ **Objection:** Object to processing of your data
+✓ **Portability:** Receive your data in a portable format
+✓ **Withdraw Consent:** Withdraw consent at any time
+
+To exercise these rights, contact: dave.welensky@gmail.com
+
+## 8. CHILDREN'S PRIVACY
+
+Our service is not intended for children under 13. We do not knowingly collect information from children under 13. If you are under 18, you must have parental consent to use SwimLoading.
+
+## 9. COOKIES AND TRACKING
+
+We use essential cookies for:
+- Authentication
+- Session management
+- User preferences
+
+You can disable cookies in your browser, but this may affect functionality.
+
+## 10. DATA SECURITY
+
+We implement security measures including:
+- Encrypted data transmission (HTTPS)
+- Encrypted password storage
+- Access controls and authentication
+- Regular security audits
+
+However, no system is 100% secure. You use SwimLoading at your own risk.
+
+## 11. CHANGES TO THIS POLICY
+
+We may update this Privacy Policy. Changes will be posted on this page with an updated "Last Updated" date. Continued use after changes constitutes acceptance.
+
+## 12. CONTACT INFORMATION
+
+**Data Protection Officer:**
+Dave Welensky
+Email: dave.welensky@gmail.com
+
+**Complaints:**
+If you believe your privacy rights have been violated, you may file a complaint with:
+
+Information Regulator (South Africa)
+Email: inforeg@justice.gov.za
+Phone: +27 10 023 5200
+
+## 13. INTERNATIONAL TRANSFERS
+
+Your data may be transferred to and processed in countries outside South Africa (EU servers). We ensure appropriate safeguards are in place.
+
+## 14. CONSENT
+
+By using SwimLoading, you consent to this Privacy Policy and the collection and use of your information as described.
+
+---
+
+**Your privacy matters. Swim safe.** 🌊
