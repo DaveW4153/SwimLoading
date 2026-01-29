@@ -1565,9 +1565,99 @@
         
         // ===== END ONBOARDING =====
         
+        // GPS State
+        let currentGpsLocation = null;
+        
+        // Get current GPS location
+        async function getCurrentLocation() {
+            const btn = document.getElementById('gpsButton');
+            const status = document.getElementById('gpsStatus');
+            
+            if (!navigator.geolocation) {
+                alert('GPS not supported on this device');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" style="width: 14px; height: 14px; animation: spin 1s linear infinite;"></i> Getting location...';
+            status.textContent = 'Detecting...';
+            status.style.color = 'var(--warning)';
+            
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    currentGpsLocation = { lat, lng };
+                    
+                    // Find nearest spot
+                    const nearest = findNearestSpot(lat, lng);
+                    
+                    if (nearest) {
+                        // Select the nearest spot in dropdown
+                        const select = document.querySelector('#logTemp select[data-spots]');
+                        select.value = nearest.spot.id;
+                        
+                        status.innerHTML = `📍 ${nearest.spot.name} (${nearest.distance.toFixed(1)}km away)`;
+                        status.style.color = 'var(--success)';
+                    } else {
+                        status.textContent = `📍 ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+                        status.style.color = 'var(--ocean-light)';
+                    }
+                    
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="map-pin" style="width: 14px; height: 14px;"></i> Update Location';
+                    initIcons();
+                },
+                (error) => {
+                    console.error('GPS error:', error);
+                    status.textContent = 'Location access denied';
+                    status.style.color = 'var(--danger)';
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="map-pin" style="width: 14px; height: 14px;"></i> Use My Location';
+                    initIcons();
+                    
+                    if (error.code === 1) {
+                        alert('Please allow location access to use GPS');
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        }
+        
+        // Calculate distance between two points (Haversine formula)
+        function getDistanceKm(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        // Find nearest spot to GPS coordinates
+        function findNearestSpot(lat, lng) {
+            if (!spots || spots.length === 0) return null;
+            
+            let nearest = null;
+            let minDistance = Infinity;
+            
+            for (const spot of spots) {
+                const distance = getDistanceKm(lat, lng, spot.latitude, spot.longitude);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearest = { spot, distance };
+                }
+            }
+            
+            // Only return if within 10km (reasonable for Cape Town spots)
+            return minDistance <= 10 ? nearest : null;
+        }
+        
         // Submit temperature log
         async function submitTempLog() {
-            const spotId = document.querySelector('#logTemp select').value;
+            const spotId = document.querySelector('#logTemp select[data-spots]').value;
             const temp = parseFloat(document.getElementById('tempValue').textContent);
             const conditionsRaw = document.querySelector('#logTemp .toggle-btn.active')?.textContent.trim() || '😌 Calm';
             
@@ -1580,22 +1670,37 @@
             
             const notes = document.querySelector('#logTemp textarea').value;
             
+            // Build insert object
+            const logData = {
+                user_id: currentUser.id,
+                spot_id: spotId,
+                temp_c: temp,
+                conditions: conditions,
+                hazards: hazards,
+                notes: notes
+            };
+            
+            // Add GPS coordinates if available (for future custom spots feature)
+            // Note: Could store in notes or a separate field later
+            if (currentGpsLocation) {
+                logData.notes = (notes ? notes + '\n' : '') + 
+                    `[GPS: ${currentGpsLocation.lat.toFixed(5)}, ${currentGpsLocation.lng.toFixed(5)}]`;
+            }
+            
             const { data, error } = await supabaseClient
                 .from('temp_logs')
-                .insert({
-                    user_id: currentUser.id,
-                    spot_id: spotId,
-                    temp_c: temp,
-                    conditions: conditions,
-                    hazards: hazards,
-                    notes: notes
-                });
+                .insert(logData);
             
             if (error) {
                 alert('Error logging temperature: ' + error.message);
                 console.error(error);
             } else {
                 alert('🎉 Temperature logged successfully!\n\n+10 points!\n\nKeep up the streak! 🔥');
+                
+                // Reset GPS state
+                currentGpsLocation = null;
+                const status = document.getElementById('gpsStatus');
+                if (status) status.textContent = '';
                 
                 // Switch to dashboard
                 showPage('dashboard');
@@ -1876,6 +1981,11 @@
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         .card {
@@ -2254,9 +2364,15 @@
                     
                     <div class="form-group">
                         <div class="form-label"><i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle;"></i> Location</div>
-                        <select data-spots>
-                            <option>Loading spots...</option>
-                        </select>
+                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                            <select data-spots style="flex: 1;">
+                                <option>Loading spots...</option>
+                            </select>
+                            <button type="button" id="gpsButton" class="btn" style="width: auto; padding: 12px 16px; font-size: 13px;" onclick="getCurrentLocation()">
+                                <i data-lucide="navigation" style="width: 14px; height: 14px;"></i> GPS
+                            </button>
+                        </div>
+                        <div id="gpsStatus" style="font-size: 12px; color: var(--text-secondary); min-height: 18px;"></div>
                     </div>
 
                     <div class="form-group">
