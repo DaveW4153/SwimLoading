@@ -2610,6 +2610,8 @@
                 <button class="nav-tab" onclick="showPage('logTemp')">Log Temp</button>
                 <button class="nav-tab" onclick="showPage('history')">History</button>
                 <button class="nav-tab" onclick="showPage('events')">Events</button>
+                <button class="nav-tab" onclick="showPage('safety')">Safety</button>
+                <button class="nav-tab" onclick="showPage('leaderboard')">Leaderboard</button>
             </div>
 
             <!-- DASHBOARD -->
@@ -2911,6 +2913,111 @@
                     </div>
                 </div>
             </div>
+
+            <!-- SAFETY -->
+            <div id="safety" class="page">
+                <div class="card">
+                    <div class="card-title"><i data-lucide="shield-alert" style="width: 24px; height: 24px; vertical-align: middle;"></i> Safety Information</div>
+                    
+                    <!-- Emergency Numbers -->
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 2px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                        <div style="font-weight: 700; color: var(--danger); margin-bottom: 16px; font-size: 18px;">🚨 Emergency Numbers</div>
+                        <div style="display: grid; gap: 12px;">
+                            <a href="tel:0870949774" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
+                                <span style="color: var(--text-primary); font-weight: 600;">🚤 NSRI (Sea Rescue)</span>
+                                <span style="color: #38bdf8; font-weight: 700;">087 094 9774</span>
+                            </a>
+                            <a href="tel:112" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
+                                <span style="color: var(--text-primary); font-weight: 600;">📱 Cell Emergency</span>
+                                <span style="color: #38bdf8; font-weight: 700;">112</span>
+                            </a>
+                            <a href="tel:10111" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
+                                <span style="color: var(--text-primary); font-weight: 600;">👮 Police</span>
+                                <span style="color: #38bdf8; font-weight: 700;">10111</span>
+                            </a>
+                            <a href="tel:10177" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
+                                <span style="color: var(--text-primary); font-weight: 600;">🚑 Ambulance</span>
+                                <span style="color: #38bdf8; font-weight: 700;">10177</span>
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <!-- Share Location Button -->
+                    <div style="margin-bottom: 24px;">
+                        <button class="btn btn-success" onclick="shareMyLocation()" style="width: 100%; padding: 16px; font-size: 16px;">
+                            <i data-lucide="share-2" style="width: 18px; height: 18px; vertical-align: middle;"></i> Share My Location via WhatsApp
+                        </button>
+                        <div id="shareLocationStatus" style="text-align: center; margin-top: 8px; font-size: 13px; color: var(--text-secondary);"></div>
+                    </div>
+                    
+                    <!-- Marine Life Encounters -->
+                    <div style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 16px; font-size: 18px;">🦈 Marine Life Encounters</div>
+                        <div style="color: var(--text-secondary); line-height: 1.7; font-size: 14px;">
+                            <p style="margin-bottom: 12px;">Cape Town waters are home to diverse marine life. While encounters are rare, be aware of:</p>
+                            <ul style="margin: 0 0 16px 20px; padding: 0;">
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">🦈 Sharks</strong> – Great whites are present, especially near seal colonies. Avoid swimming near seals, at dawn/dusk, or in murky water.</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">🪼 Jellyfish & Bluebottles</strong> – Common seasonally. Check conditions before entering. Exit if you see large numbers.</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">🦭 Seals</strong> – Generally curious but can be territorial. Give them space and don't corner them.</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">🐚 Sea Urchins</strong> – Found on rocks. Wear booties when entering from rocky areas.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- Key Safety Tips -->
+                    <div style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 16px; font-size: 18px;">⚠️ Key Safety Rules</div>
+                        <div style="color: var(--text-secondary); line-height: 1.7; font-size: 14px;">
+                            <ul style="margin: 0 0 0 20px; padding: 0;">
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Never swim alone</strong> – Always have a buddy or shore spotter</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Check conditions first</strong> – Weather, swell, wind, and temperature</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Know your limits</strong> – Cold water saps energy faster than you expect</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Wear a bright cap</strong> – Be visible to boats and spotters</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Tell someone your plan</strong> – Where you're going and when to expect you back</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Know the exit points</strong> – Scout the area before getting in</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- Cold Water Warning -->
+                    <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 20px;">
+                        <div style="font-weight: 700; color: var(--ocean-light); margin-bottom: 12px; font-size: 18px;">❄️ Cold Water Risks</div>
+                        <div style="color: var(--text-secondary); line-height: 1.7; font-size: 14px;">
+                            <p style="margin-bottom: 12px;">Cape Town water temps range from <strong style="color: var(--text-primary);">8°C to 20°C</strong>. Cold water can cause:</p>
+                            <ul style="margin: 0 0 0 20px; padding: 0;">
+                                <li><strong style="color: var(--text-primary);">Cold water shock</strong> (first 3 minutes)</li>
+                                <li><strong style="color: var(--text-primary);">Swimming failure</strong> (3-30 minutes)</li>
+                                <li><strong style="color: var(--text-primary);">Hypothermia</strong> (30+ minutes)</li>
+                                <li><strong style="color: var(--text-primary);">Cardiac events</strong> (especially in cold shock phase)</li>
+                            </ul>
+                            <p style="margin-top: 12px; margin-bottom: 0;"><em>Acclimatize gradually. Know your limits. When in doubt, get out.</em></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LEADERBOARD -->
+            <div id="leaderboard" class="page">
+                <div class="card">
+                    <div class="card-title"><i data-lucide="trophy" style="width: 24px; height: 24px; vertical-align: middle;"></i> Leaderboard</div>
+                    
+                    <!-- Weekly Leaders -->
+                    <div style="margin-bottom: 32px;">
+                        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 16px; font-size: 18px;">🔥 This Week's Top Swimmers</div>
+                        <div id="weeklyLeaderboard" style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 16px;">
+                            <div style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- All-Time Leaders -->
+                    <div>
+                        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 16px; font-size: 18px;">🏆 All-Time Legends</div>
+                        <div id="alltimeLeaderboard" style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 16px;">
+                            <div style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2937,10 +3044,128 @@
                 loadHistory();
             } else if (page === 'events') {
                 loadEvents();
+            } else if (page === 'leaderboard') {
+                loadLeaderboard();
             }
             
             // Initialize icons after page switch
             initIcons();
+        }
+        
+        // Share location via WhatsApp
+        function shareMyLocation() {
+            const statusEl = document.getElementById('shareLocationStatus');
+            
+            if (currentGpsLocation) {
+                const lat = currentGpsLocation.lat;
+                const lng = currentGpsLocation.lng;
+                const mapsUrl = `https://maps.google.com/maps?q=${lat},${lng}`;
+                const message = encodeURIComponent(`📍 My current location:\n${mapsUrl}`);
+                const whatsappUrl = `https://wa.me/?text=${message}`;
+                window.open(whatsappUrl, '_blank');
+                statusEl.textContent = '';
+            } else {
+                statusEl.innerHTML = '<span style="color: var(--warning);">📍 Getting your location...</span>';
+                
+                if (!navigator.geolocation) {
+                    statusEl.innerHTML = '<span style="color: var(--danger);">❌ GPS not available on this device</span>';
+                    return;
+                }
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        currentGpsLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        statusEl.innerHTML = '<span style="color: var(--success);">✓ Location found! Tap again to share.</span>';
+                    },
+                    (error) => {
+                        statusEl.innerHTML = '<span style="color: var(--danger);">❌ Could not get location. Please enable GPS.</span>';
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            }
+        }
+        
+        // Load leaderboard data
+        async function loadLeaderboard() {
+            const weeklyEl = document.getElementById('weeklyLeaderboard');
+            const alltimeEl = document.getElementById('alltimeLeaderboard');
+            
+            try {
+                // Get date for start of current week (Monday)
+                const now = new Date();
+                const dayOfWeek = now.getDay();
+                const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                const monday = new Date(now);
+                monday.setDate(now.getDate() - diffToMonday);
+                monday.setHours(0, 0, 0, 0);
+                const weekStart = monday.toISOString();
+                
+                // Fetch weekly stats
+                const { data: weeklyData, error: weeklyError } = await supabaseClient
+                    .from('user_stats')
+                    .select('user_id, points_week, profiles(display_name)')
+                    .gt('points_week', 0)
+                    .order('points_week', { ascending: false })
+                    .limit(10);
+                
+                if (weeklyError) {
+                    console.error('Weekly leaderboard error:', weeklyError);
+                    weeklyEl.innerHTML = `<div style="text-align: center; color: var(--danger); padding: 20px;">
+                        ❌ Could not load weekly leaderboard<br>
+                        <small style="color: var(--text-secondary);">${weeklyError.message}</small>
+                    </div>`;
+                } else if (!weeklyData || weeklyData.length === 0) {
+                    weeklyEl.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">No activity this week yet. Be the first!</div>';
+                } else {
+                    weeklyEl.innerHTML = renderLeaderboardList(weeklyData, 'points_week');
+                }
+                
+                // Fetch all-time stats
+                const { data: alltimeData, error: alltimeError } = await supabaseClient
+                    .from('user_stats')
+                    .select('user_id, points_total, profiles(display_name)')
+                    .gt('points_total', 0)
+                    .order('points_total', { ascending: false })
+                    .limit(10);
+                
+                if (alltimeError) {
+                    console.error('All-time leaderboard error:', alltimeError);
+                    alltimeEl.innerHTML = `<div style="text-align: center; color: var(--danger); padding: 20px;">
+                        ❌ Could not load all-time leaderboard<br>
+                        <small style="color: var(--text-secondary);">${alltimeError.message}</small>
+                    </div>`;
+                } else if (!alltimeData || alltimeData.length === 0) {
+                    alltimeEl.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">No swimmers on the leaderboard yet.</div>';
+                } else {
+                    alltimeEl.innerHTML = renderLeaderboardList(alltimeData, 'points_total');
+                }
+                
+            } catch (err) {
+                console.error('Leaderboard error:', err);
+                weeklyEl.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 20px;">Error loading leaderboard</div>';
+                alltimeEl.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 20px;">Error loading leaderboard</div>';
+            }
+        }
+        
+        function renderLeaderboardList(data, pointsField) {
+            const medals = ['🥇', '🥈', '🥉'];
+            return data.map((row, i) => {
+                const name = row.profiles?.display_name || 'Anonymous Swimmer';
+                const points = row[pointsField] || 0;
+                const medal = medals[i] || `${i + 1}.`;
+                const isTop3 = i < 3;
+                
+                return `<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; ${isTop3 ? 'background: rgba(56, 189, 248, 0.1);' : ''} border-radius: 8px; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: ${isTop3 ? '20px' : '14px'}; width: 30px; text-align: center;">${medal}</span>
+                        <span style="color: var(--text-primary); font-weight: ${isTop3 ? '600' : '400'};">${name}</span>
+                    </div>
+                    <span style="color: var(--ocean-light); font-weight: 700;">${points.toLocaleString()} pts</span>
+                </div>`;
+            }).join('');
         }
 
         function toggleSingle(el) {
