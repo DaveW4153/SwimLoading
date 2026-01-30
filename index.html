@@ -1683,6 +1683,8 @@
             // Add GPS coordinates if available (for future custom spots feature)
             // Note: Could store in notes or a separate field later
             if (currentGpsLocation) {
+                logData.lat = currentGpsLocation.lat;
+                logData.lng = currentGpsLocation.lng;
                 logData.notes = (notes ? notes + '\n' : '') + 
                     `[GPS: ${currentGpsLocation.lat.toFixed(5)}, ${currentGpsLocation.lng.toFixed(5)}]`;
             }
