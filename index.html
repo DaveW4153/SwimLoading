@@ -1475,6 +1475,263 @@
             btn.style.cursor = allChecked ? 'pointer' : 'not-allowed';
         }
         
+        // Consent document content (embedded for file:// compatibility)
+        const consentDocuments = {
+            terms: {
+                title: 'Terms of Service',
+                content: `
+<h4 style="color: #38bdf8; margin-bottom: 12px;">SwimLoading Terms of Service</h4>
+<p><strong>Effective Date:</strong> January 2025</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">1. Acceptance of Terms</h4>
+<p>By accessing or using SwimLoading ("the App"), you agree to be bound by these Terms of Service. If you do not agree, do not use the App.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">2. Description of Service</h4>
+<p>SwimLoading is a community platform for open water swimmers to:</p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Log and share water temperature readings</li>
+<li>View swim conditions at various spots</li>
+<li>Connect with the local swimming community</li>
+<li>Track swimming activities</li>
+</ul>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">3. User Responsibilities</h4>
+<p>You agree to:</p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Provide accurate information when logging temperatures and conditions</li>
+<li>Not misuse the service or attempt to harm other users</li>
+<li>Respect the community and other swimmers</li>
+<li>Keep your account credentials secure</li>
+</ul>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">4. Safety Disclaimer</h4>
+<p>SwimLoading provides information for convenience only. <strong>You are solely responsible for assessing conditions and your own safety.</strong> Never rely solely on app data for safety decisions.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">5. Intellectual Property</h4>
+<p>The App and its content are owned by SwimLoading. User-submitted data (temperatures, conditions) may be used to improve the service and shared with the community.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">6. Termination</h4>
+<p>We may suspend or terminate accounts that violate these terms or for any reason at our discretion.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">7. Changes to Terms</h4>
+<p>We may update these terms at any time. Continued use constitutes acceptance of changes.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">8. Governing Law</h4>
+<p>These terms are governed by the laws of South Africa.</p>
+`
+            },
+            privacy: {
+                title: 'Privacy Policy (POPIA Compliant)',
+                content: `
+<h4 style="color: #38bdf8; margin-bottom: 12px;">SwimLoading Privacy Policy</h4>
+<p><strong>Effective Date:</strong> January 2025</p>
+<p>This policy complies with the Protection of Personal Information Act (POPIA) of South Africa.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">1. Information We Collect</h4>
+<p><strong>Account Information:</strong></p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Email address</li>
+<li>Full name</li>
+<li>Phone number (for emergency contact)</li>
+<li>Date of birth</li>
+<li>Physical address</li>
+</ul>
+
+<p><strong>Usage Data:</strong></p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Temperature logs you submit</li>
+<li>GPS coordinates (when you grant permission)</li>
+<li>Swim check-ins and activities</li>
+<li>App usage patterns</li>
+</ul>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">2. How We Use Your Information</h4>
+<ul style="margin: 8px 0 8px 20px;">
+<li>To provide and improve the SwimLoading service</li>
+<li>To display community temperature data</li>
+<li>For safety features (check-in/check-out, emergency contacts)</li>
+<li>To communicate important updates</li>
+<li>For anonymized research to improve ocean safety</li>
+</ul>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">3. Data Sharing</h4>
+<p>We may share data with:</p>
+<ul style="margin: 8px 0 8px 20px;">
+<li><strong>Other users:</strong> Your temperature logs and swim spot data (not personal details)</li>
+<li><strong>Emergency services:</strong> If you fail to check out from a swim</li>
+<li><strong>Research partners:</strong> Anonymized data only, for ocean safety research</li>
+</ul>
+<p>We do <strong>not</strong> sell your personal information.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">4. Your POPIA Rights</h4>
+<p>Under POPIA, you have the right to:</p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Access your personal information</li>
+<li>Correct inaccurate information</li>
+<li>Request deletion of your data</li>
+<li>Object to processing</li>
+<li>Withdraw consent</li>
+</ul>
+<p>To exercise these rights, contact us at privacy@swimloading.com</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">5. Data Security</h4>
+<p>We use industry-standard security measures to protect your data, including encryption in transit and at rest.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">6. Data Retention</h4>
+<p>We retain your data for as long as your account is active. You may request deletion at any time.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">7. Information Officer</h4>
+<p>SwimLoading's Information Officer can be contacted at: privacy@swimloading.com</p>
+`
+            },
+            waiver: {
+                title: 'Liability Waiver',
+                content: `
+<h4 style="color: #ef4444; margin-bottom: 12px;">⚠️ LIABILITY WAIVER AND ASSUMPTION OF RISK</h4>
+<p><strong>PLEASE READ CAREFULLY BEFORE ACCEPTING</strong></p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">ACKNOWLEDGMENT OF RISKS</h4>
+<p>I understand and acknowledge that <strong>open water swimming is an inherently dangerous activity</strong> that involves serious risks including but not limited to:</p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Drowning and death</li>
+<li>Hypothermia and cold water shock</li>
+<li>Cardiac events</li>
+<li>Marine life encounters (sharks, jellyfish, etc.)</li>
+<li>Strong currents, waves, and changing conditions</li>
+<li>Boat traffic and watercraft collisions</li>
+<li>Physical injury or permanent disability</li>
+</ul>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">VOLUNTARY PARTICIPATION</h4>
+<p>I voluntarily choose to participate in open water swimming activities. I understand that SwimLoading is an information platform only and <strong>does not supervise, organize, or control any swimming activities</strong>.</p>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">RELEASE OF LIABILITY</h4>
+<p>In consideration of being allowed to use SwimLoading, I hereby:</p>
+<ol style="margin: 8px 0 8px 20px;">
+<li><strong>RELEASE AND DISCHARGE</strong> SwimLoading, its owners, operators, employees, and affiliates from any and all liability, claims, demands, or causes of action that may arise from my use of the app or participation in open water swimming.</li>
+<li><strong>WAIVE</strong> any claims I may have against SwimLoading for injury, death, or property damage.</li>
+<li><strong>ASSUME ALL RISKS</strong> associated with open water swimming, whether known or unknown.</li>
+</ol>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">DATA ACCURACY DISCLAIMER</h4>
+<p>I understand that:</p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Temperature and condition data is user-submitted and may be <strong>inaccurate</strong></li>
+<li>Conditions can change rapidly and without warning</li>
+<li>I must <strong>independently verify all conditions</strong> before swimming</li>
+<li>SwimLoading makes <strong>no guarantees</strong> about data accuracy</li>
+</ul>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">INDEMNIFICATION</h4>
+<p>I agree to indemnify and hold harmless SwimLoading from any claims, damages, or expenses arising from my swimming activities or use of the app.</p>
+
+<h4 style="color: #ef4444; margin: 16px 0 8px 0;">⚠️ BY ACCEPTING, I CONFIRM THAT:</h4>
+<ul style="margin: 8px 0 8px 20px;">
+<li>I have read and understood this waiver</li>
+<li>I am at least 18 years old (or have parental consent)</li>
+<li>I accept full responsibility for my safety</li>
+<li>I am physically fit to participate in open water swimming</li>
+</ul>
+`
+            },
+            data: {
+                title: 'Data Collection Consent',
+                content: `
+<h4 style="color: #38bdf8; margin-bottom: 12px;">Data Collection Consent</h4>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">Purpose of Data Collection</h4>
+<p>SwimLoading collects data to:</p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Build a community resource of ocean conditions</li>
+<li>Improve safety for open water swimmers</li>
+<li>Enable features like check-in/check-out safety systems</li>
+<li>Support research into ocean swimming safety</li>
+</ul>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">What Data We Collect</h4>
+<p><strong>Location Data:</strong></p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>GPS coordinates when you log temperatures</li>
+<li>Location during check-in/check-out</li>
+<li>This helps verify spot accuracy and enables safety features</li>
+</ul>
+
+<p><strong>Activity Data:</strong></p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Temperature readings you submit</li>
+<li>Conditions and hazards you report</li>
+<li>Your swim activities and check-ins</li>
+</ul>
+
+<p><strong>Personal Data:</strong></p>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Contact information for safety features</li>
+<li>Emergency contact details</li>
+</ul>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">How We Use This Data</h4>
+<ol style="margin: 8px 0 8px 20px;">
+<li><strong>Community Features:</strong> Sharing temperature and condition data with other swimmers</li>
+<li><strong>Safety:</strong> Alerting emergency contacts if you don't check out</li>
+<li><strong>Improvement:</strong> Making the app better based on usage patterns</li>
+<li><strong>Research:</strong> Anonymized data may be used for ocean safety research</li>
+</ol>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">Your Control Over Your Data</h4>
+<ul style="margin: 8px 0 8px 20px;">
+<li>You can disable GPS permissions in your device settings</li>
+<li>You can request a copy of your data at any time</li>
+<li>You can request deletion of your account and data</li>
+<li>Temperature logs may be retained anonymously for community benefit</li>
+</ul>
+
+<h4 style="color: #f8fafc; margin: 16px 0 8px 0;">Third-Party Sharing</h4>
+<p>Your data may be shared with:</p>
+<ul style="margin: 8px 0 8px 20px;">
+<li><strong>Other users:</strong> Temperature logs (with optional anonymity)</li>
+<li><strong>Emergency services:</strong> Only when safety features are triggered</li>
+<li><strong>Insurance partners:</strong> Only with your explicit additional consent</li>
+</ul>
+
+<h4 style="color: #38bdf8; margin: 16px 0 8px 0;">By accepting, you consent to:</h4>
+<ul style="margin: 8px 0 8px 20px;">
+<li>Collection of the data described above</li>
+<li>Use of this data for the stated purposes</li>
+<li>Sharing as described in this policy</li>
+</ul>
+`
+            }
+        };
+        
+        function openConsentModal(docType) {
+            const doc = consentDocuments[docType];
+            if (!doc) return;
+            
+            document.getElementById('consentModalTitle').textContent = doc.title;
+            document.getElementById('consentModalBody').innerHTML = doc.content;
+            
+            const modal = document.getElementById('consentModal');
+            modal.style.display = 'flex';
+        }
+        
+        function closeConsentModal() {
+            document.getElementById('consentModal').style.display = 'none';
+        }
+        
+        // ESC key to close modal
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeConsentModal();
+            }
+        });
+        
+        // Click outside modal to close
+        document.getElementById('consentModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeConsentModal();
+            }
+        });
+        
         async function acceptOnboardingLegal() {
             try {
                 const now = new Date().toISOString();
@@ -2213,37 +2470,49 @@
                 
                 <div style="background: rgba(15, 23, 42, 0.8); border-radius: 16px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.1);">
                     
-                    <label style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; cursor: pointer; transition: background 0.2s; margin-bottom: 12px;" onmouseover="this.style.background='rgba(56,189,248,0.1)'" onmouseout="this.style.background='transparent'">
+                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; transition: background 0.2s; margin-bottom: 12px;" onmouseover="this.style.background='rgba(56,189,248,0.1)'" onmouseout="this.style.background='transparent'">
                         <input type="checkbox" id="obTerms" onchange="checkOnboardingBoxes()" style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="flex: 1;">
-                            <div style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;"><i data-lucide="scroll-text" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Terms of Service</div>
-                            <div style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">I understand the rules and responsibilities</div>
+                            <div style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;">
+                                <label for="obTerms" style="cursor: pointer;"><i data-lucide="scroll-text" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Terms of Service</label>
+                                <a href="#" onclick="openConsentModal('terms'); return false;" style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
+                            </div>
+                            <label for="obTerms" style="cursor: pointer;"><div style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">I understand the rules and responsibilities</div></label>
                         </div>
-                    </label>
+                    </div>
                     
-                    <label style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; cursor: pointer; transition: background 0.2s; margin-bottom: 12px;" onmouseover="this.style.background='rgba(56,189,248,0.1)'" onmouseout="this.style.background='transparent'">
+                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; transition: background 0.2s; margin-bottom: 12px;" onmouseover="this.style.background='rgba(56,189,248,0.1)'" onmouseout="this.style.background='transparent'">
                         <input type="checkbox" id="obPrivacy" onchange="checkOnboardingBoxes()" style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="flex: 1;">
-                            <div style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;"><i data-lucide="shield-check" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Privacy Policy (POPIA)</div>
-                            <div style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">I understand how my data is used</div>
+                            <div style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;">
+                                <label for="obPrivacy" style="cursor: pointer;"><i data-lucide="shield-check" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Privacy Policy (POPIA)</label>
+                                <a href="#" onclick="openConsentModal('privacy'); return false;" style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
+                            </div>
+                            <label for="obPrivacy" style="cursor: pointer;"><div style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">I understand how my data is used</div></label>
                         </div>
-                    </label>
+                    </div>
                     
-                    <label style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; cursor: pointer; margin-bottom: 12px; border: 2px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05);">
+                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 2px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05);">
                         <input type="checkbox" id="obWaiver" onchange="checkOnboardingBoxes()" style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="flex: 1;">
-                            <div style="color: #ef4444; font-weight: 600; margin-bottom: 8px; font-family: system-ui, -apple-system, sans-serif;"><i data-lucide="alert-triangle" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Liability Waiver</div>
-                            <div style="color: #cbd5e1; font-size: 12px; font-family: system-ui, -apple-system, sans-serif;">⚠️ Ocean swimming is dangerous. I may be seriously injured or killed. SwimLoading assumes ZERO liability.</div>
+                            <div style="color: #ef4444; font-weight: 600; margin-bottom: 8px; font-family: system-ui, -apple-system, sans-serif;">
+                                <label for="obWaiver" style="cursor: pointer;"><i data-lucide="alert-triangle" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Liability Waiver</label>
+                                <a href="#" onclick="openConsentModal('waiver'); return false;" style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
+                            </div>
+                            <label for="obWaiver" style="cursor: pointer;"><div style="color: #cbd5e1; font-size: 12px; font-family: system-ui, -apple-system, sans-serif;">⚠️ Ocean swimming is dangerous. I may be seriously injured or killed. SwimLoading assumes ZERO liability.</div></label>
                         </div>
-                    </label>
+                    </div>
                     
-                    <label style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(56,189,248,0.1)'" onmouseout="this.style.background='transparent'">
+                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='rgba(56,189,248,0.1)'" onmouseout="this.style.background='transparent'">
                         <input type="checkbox" id="obData" onchange="checkOnboardingBoxes()" style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="flex: 1;">
-                            <div style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;"><i data-lucide="database" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Data Consent</div>
-                            <div style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">I consent to data collection for safety</div>
+                            <div style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;">
+                                <label for="obData" style="cursor: pointer;"><i data-lucide="database" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Data Consent</label>
+                                <a href="#" onclick="openConsentModal('data'); return false;" style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
+                            </div>
+                            <label for="obData" style="cursor: pointer;"><div style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">I consent to data collection for safety</div></label>
                         </div>
-                    </label>
+                    </div>
                     
                 </div>
                 
@@ -2252,6 +2521,20 @@
                 <div style="text-align: center; margin-top: 16px;">
                     <button onclick="signOut()" style="background: transparent; border: 1px solid #64748b; color: #94a3b8; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: system-ui, -apple-system, sans-serif;">Cancel</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consent Document Modal -->
+    <div id="consentModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: #1e293b; border-radius: 16px; max-width: 600px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h3 id="consentModalTitle" style="margin: 0; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif;"></h3>
+                <button onclick="closeConsentModal()" style="background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
+            </div>
+            <div id="consentModalBody" style="padding: 24px; overflow-y: auto; flex: 1; color: #cbd5e1; font-size: 14px; line-height: 1.6; font-family: system-ui, -apple-system, sans-serif;"></div>
+            <div style="padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.1);">
+                <button onclick="closeConsentModal()" style="width: 100%; padding: 12px; background: #38bdf8; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-family: system-ui, -apple-system, sans-serif;">Close</button>
             </div>
         </div>
     </div>
