@@ -65,4 +65,10 @@ Coming soon: Vercel/Netlify deployment for beta testing.
 
 ---
 
+## Contributing
+
+Built by Dave ([@DaveW4153](https://github.com/DaveW4153)) with help from DWai 🤖
+
+---
+
 Built with 🌊 in Cape Town
