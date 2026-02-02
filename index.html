@@ -1,47 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SwimLoading - Live Prototype</title>
-    
+
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
+
     <!-- Chart.js for temperature trends -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
+
     <script>
         // Initialize Supabase
         const SUPABASE_URL = 'https://szgkzuswelntnevobnoh.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN6Z2t6dXN3ZWxudG5ldm9ibm9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxODY1NTUsImV4cCI6MjA4Mzc2MjU1NX0.UfKqj2OZ-XeyzCy-MZYZqsDWjn_4EKrhgCFR8eIK2NA';
-        
+
         let supabaseClient;
-        
+
         // Initialize after library loads
         if (window.supabase) {
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         }
-        
+
         // Global state
         let currentUser = null;
         let spots = [];
-        
+
+        // Global state for Spot Lock
+        let selectedSpotLocked = false;
+        let gpsSuggestedSpotId = null;
+
         // Icon helper function
         function icon(name, size = 16) {
             return `<i data-lucide="${name}" style="width: ${size}px; height: ${size}px; display: inline-block; vertical-align: middle;"></i>`;
         }
-        
+
         // Initialize Lucide icons after DOM updates
         function initIcons() {
             if (window.lucide) {
                 lucide.createIcons();
             }
         }
-        
+
         // Check authentication on load
         async function checkAuth() {
             const { data: { session } } = await supabaseClient.auth.getSession();
@@ -52,13 +57,13 @@
                 showAuth();
             }
         }
-        
+
         // Show auth screen
         function showAuth() {
             document.getElementById('authScreen').style.display = 'flex';
             document.getElementById('mainApp').style.display = 'none';
         }
-        
+
         // Load main app
         async function loadApp() {
             // Check if user needs onboarding
@@ -67,7 +72,7 @@
                 .select('terms_accepted_at')
                 .eq('id', currentUser.id)
                 .maybeSingle();
-            
+
             // NEW USER - show onboarding
             if (!profile || !profile.terms_accepted_at) {
                 document.getElementById('authScreen').style.display = 'none';
@@ -75,32 +80,35 @@
                 showOnboardingLegal();
                 return;
             }
-            
+
             // EXISTING USER - go to main app
             document.getElementById('authScreen').style.display = 'none';
             document.getElementById('mainApp').style.display = 'block';
-            
+
             // Load spots
             await loadSpots();
-            
+
             // Load dashboard data
             await loadDashboard();
-            
+
             // Initialize Lucide icons
             initIcons();
+
+            // Initialize spot lock handler
+            attachSpotLockHandler();
         }
-        
+
         // Sign up
         async function signUp() {
             const email = document.getElementById('signupEmail').value;
             const password = document.getElementById('signupPassword').value;
             const displayName = document.getElementById('signupName').value;
-            
+
             if (!email || !password || !displayName) {
                 alert('Please fill in all fields');
                 return;
             }
-            
+
             const { data, error } = await supabaseClient.auth.signUp({
                 email,
                 password,
@@ -108,7 +116,7 @@
                     data: { display_name: displayName }
                 }
             });
-            
+
             if (error) {
                 alert('Sign up failed: ' + error.message);
             } else {
@@ -117,21 +125,21 @@
                     id: data.user.id,
                     display_name: displayName
                 });
-                
+
                 alert('Sign up successful! Please check your email to verify.');
             }
         }
-        
+
         // Sign in
         async function signIn() {
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
-            
+
             const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email,
                 password
             });
-            
+
             if (error) {
                 alert('Login failed: ' + error.message);
             } else {
@@ -139,14 +147,14 @@
                 loadApp();
             }
         }
-        
+
         // Sign out
         async function signOut() {
             await supabaseClient.auth.signOut();
             currentUser = null;
             showAuth();
         }
-        
+
         // Load spots
         async function loadSpots() {
             const { data, error } = await supabaseClient
@@ -154,37 +162,51 @@
                 .select('*')
                 .eq('active', true)
                 .order('name');
-            
+
             if (data) {
                 spots = data;
                 populateSpotDropdowns();
             }
         }
-        
+
         // Populate spot dropdowns
         function populateSpotDropdowns() {
             const selects = document.querySelectorAll('select[data-spots]');
             selects.forEach(select => {
-                select.innerHTML = spots.map(spot => 
+                select.innerHTML = spots.map(spot =>
                     `<option value="${spot.id}">${spot.name}</option>`
                 ).join('');
             });
-            
+
             // Also populate history filter
             const historyFilter = document.getElementById('historySpotFilter');
             if (historyFilter) {
-                historyFilter.innerHTML = '<option value="">All Locations</option>' + 
+                historyFilter.innerHTML = '<option value="">All Locations</option>' +
                     spots.map(spot => `<option value="${spot.id}">${spot.name}</option>`).join('');
             }
-            
+
             // Also populate event filter
             const eventFilter = document.getElementById('eventSpotFilter');
             if (eventFilter) {
-                eventFilter.innerHTML = '<option value="">All Locations</option>' + 
+                eventFilter.innerHTML = '<option value="">All Locations</option>' +
                     spots.map(spot => `<option value="${spot.id}">${spot.name}</option>`).join('');
             }
         }
-        
+
+        // Attach Spot Lock Handler
+        function attachSpotLockHandler() {
+            const spotSelect = document.querySelector('#logTemp select[data-spots]');
+            if (spotSelect) {
+                spotSelect.removeEventListener('change', handleSpotLock);
+                spotSelect.addEventListener('change', handleSpotLock);
+            }
+        }
+
+        function handleSpotLock() {
+            selectedSpotLocked = true;
+            // console.log('Spot selection locked by user');
+        }
+
         // Load dashboard
         async function loadDashboard() {
             try {
@@ -194,7 +216,7 @@
                     .select('*')
                     .eq('user_id', currentUser.id)
                     .single();
-                
+
                 // Render stats
                 document.getElementById('dashStats').innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
@@ -212,10 +234,10 @@
                         </div>
                     </div>
                 `;
-                
+
                 // Load upcoming swims user is attending
                 console.log('Loading upcoming swims for user:', currentUser.id);
-                
+
                 const { data: memberEvents, error: eventsError } = await supabaseClient
                     .from('swim_event_members')
                     .select(`
@@ -224,18 +246,18 @@
                     `)
                     .eq('user_id', currentUser.id)
                     .in('rsvp', ['yes', 'maybe']);
-                
+
                 console.log('Member events result:', { memberEvents, eventsError });
-                
+
                 // Filter for upcoming events in JavaScript
                 const now = new Date();
                 const upcomingSwims = memberEvents
                     ?.map(m => m.swim_events)
                     .filter(e => e && new Date(e.start_at) >= now)
                     .slice(0, 3) || [];
-                
+
                 console.log('Upcoming swims after filter:', upcomingSwims);
-                
+
                 if (upcomingSwims.length === 0) {
                     document.getElementById('dashUpcomingSwims').innerHTML = `
                         <div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 14px;">
@@ -256,19 +278,19 @@
                                     </div>
                                     <div style="text-align: right;">
                                         <div style="font-size: 13px; color: ${isToday ? 'var(--success)' : 'var(--ocean-light)'}; font-weight: 600;">
-                                            ${isToday ? 'TODAY' : d.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}
+                                            ${isToday ? 'TODAY' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                         </div>
-                                        <div style="font-size: 12px; color: var(--text-secondary);">${d.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary);">${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
                                     </div>
                                 </div>
                             </div>
                         `;
                     }).join('');
                 }
-                
+
                 // Initialize icons after rendering upcoming swims
                 initIcons();
-                
+
                 // Load recent temperatures
                 const { data: recentLogs } = await supabaseClient
                     .from('temp_logs')
@@ -278,7 +300,7 @@
                     `)
                     .order('created_at', { ascending: false })
                     .limit(5);
-                
+
                 if (!recentLogs || recentLogs.length === 0) {
                     document.getElementById('dashConditions').innerHTML = `
                         <div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 14px;">
@@ -292,35 +314,35 @@
                         if (!bySpot[log.spot_id]) bySpot[log.spot_id] = log;
                     });
                     const latest = Object.values(bySpot).slice(0, 4);
-                    
+
                     document.getElementById('dashConditions').innerHTML = `
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
                             ${latest.map(log => {
-                                const color = log.temp_c < 12 ? '#3b82f6' : log.temp_c < 16 ? '#06b6d4' : log.temp_c < 20 ? '#10b981' : '#f59e0b';
-                                return `
+                        const color = log.temp_c < 12 ? '#3b82f6' : log.temp_c < 16 ? '#06b6d4' : log.temp_c < 20 ? '#10b981' : '#f59e0b';
+                        return `
                                     <div style="background: rgba(15, 23, 42, 0.6); border-radius: 10px; padding: 12px; text-align: center;">
                                         <div style="font-size: 24px; font-weight: 700; color: ${color};">${log.temp_c}°</div>
                                         <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${log.spots?.name || 'Unknown'}</div>
                                         <div style="font-size: 10px; color: var(--text-secondary); opacity: 0.7;">${getTimeAgo(new Date(log.created_at))}</div>
                                     </div>
                                 `;
-                            }).join('')}
+                    }).join('')}
                         </div>
                     `;
                 }
-                
+
             } catch (err) {
                 console.error('Error loading dashboard:', err);
             }
-            
+
             // Initialize icons after dashboard loads
             initIcons();
         }
-        
+
         // History view state
         let historyView = 'my'; // 'my' or 'community'
         let tempChart = null;
-        
+
         // Toggle history view
         function toggleHistoryView(el, view) {
             historyView = view;
@@ -328,11 +350,11 @@
             el.classList.add('active');
             loadHistory();
         }
-        
+
         // Load history and trends
         async function loadHistory() {
             const spotFilter = document.getElementById('historySpotFilter').value;
-            
+
             try {
                 // First, try simple query without joins
                 let query = supabaseClient
@@ -340,82 +362,82 @@
                     .select('*')
                     .order('created_at', { ascending: false })
                     .limit(50);
-                
+
                 // Filter by user if "My Logs" is selected
                 if (historyView === 'my') {
                     query = query.eq('user_id', currentUser.id);
                 }
-                
+
                 // Filter by spot if selected
                 if (spotFilter) {
                     query = query.eq('spot_id', spotFilter);
                 }
-                
+
                 const { data: logs, error } = await query;
-                
+
                 if (error) {
                     console.error('Error loading history:', error);
                     console.error('Error details:', JSON.stringify(error, null, 2));
-                    document.getElementById('historyList').innerHTML = 
+                    document.getElementById('historyList').innerHTML =
                         `<div style="color: var(--danger); text-align: center; padding: 20px;">
                             Error loading history<br>
                             <small style="font-size: 11px;">${error.message || 'Unknown error'}</small>
                         </div>`;
                     return;
                 }
-                
+
                 console.log('Loaded logs:', logs);
-                
+
                 // Now load spot and profile data separately
                 if (logs && logs.length > 0) {
                     const spotIds = [...new Set(logs.map(l => l.spot_id).filter(Boolean))];
                     const userIds = [...new Set(logs.map(l => l.user_id).filter(Boolean))];
-                    
+
                     // Load spots
                     const { data: spotsData } = await supabaseClient
                         .from('spots')
                         .select('id, name')
                         .in('id', spotIds);
-                    
+
                     // Load profiles
                     const { data: profilesData } = await supabaseClient
                         .from('profiles')
                         .select('id, display_name')
                         .in('id', userIds);
-                    
+
                     // Create lookup maps
                     const spotMap = {};
                     const profileMap = {};
-                    
+
                     if (spotsData) spotsData.forEach(s => spotMap[s.id] = s);
                     if (profilesData) profilesData.forEach(p => profileMap[p.id] = p);
-                    
+
                     // Attach to logs
                     logs.forEach(log => {
                         log.spots = spotMap[log.spot_id] || null;
                         log.profiles = profileMap[log.user_id] || null;
                     });
                 }
-                
+
                 // Render list
                 renderHistoryList(logs);
-                
+
                 // Render chart
                 renderTempChart(logs);
             } catch (err) {
                 console.error('Caught error:', err);
-                document.getElementById('historyList').innerHTML = 
+                document.getElementById('historyList').innerHTML =
                     `<div style="color: var(--danger); text-align: center; padding: 20px;">
                         Unexpected error<br>
                         <small style="font-size: 11px;">${err.message}</small>
                     </div>`;
             }
         }
-        
+
         // Render history list
         function renderHistoryList(logs) {
             const container = document.getElementById('historyList');
-            
+
             if (!logs || logs.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; color: var(--text-secondary); padding: 20px;">
@@ -424,13 +446,13 @@
                 `;
                 return;
             }
-            
+
             const html = logs.map(log => {
                 const date = new Date(log.created_at);
                 const timeAgo = getTimeAgo(date);
                 const spotName = log.spots?.name || 'Unknown';
                 const userName = log.profiles?.display_name || 'Anonymous';
-                
+
                 return `
                     <div style="background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
@@ -469,21 +491,21 @@
                     </div>
                 `;
             }).join('');
-            
+
             container.innerHTML = html;
         }
-        
+
         // Render temperature chart
         function renderTempChart(logs) {
             const ctx = document.getElementById('tempChart');
-            
+
             if (!logs || logs.length === 0) {
                 ctx.style.display = 'none';
                 return;
             }
-            
+
             ctx.style.display = 'block';
-            
+
             // Prepare data (reverse to show oldest to newest)
             const reversedLogs = [...logs].reverse();
             const labels = reversedLogs.map(log => {
@@ -491,12 +513,12 @@
                 return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             });
             const temps = reversedLogs.map(log => log.temp_c);
-            
+
             // Destroy existing chart
             if (tempChart) {
                 tempChart.destroy();
             }
-            
+
             // Create new chart
             tempChart = new Chart(ctx, {
                 type: 'line',
@@ -533,7 +555,7 @@
                             },
                             ticks: {
                                 color: '#94a3b8',
-                                callback: function(value) {
+                                callback: function (value) {
                                     return value + '°C';
                                 }
                             }
@@ -550,88 +572,88 @@
                 }
             });
         }
-        
+
         // Helper: Get time ago string
         function getTimeAgo(date) {
             const seconds = Math.floor((new Date() - date) / 1000);
-            
+
             if (seconds < 60) return 'Just now';
             if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
             if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
             if (seconds < 604800) return Math.floor(seconds / 86400) + 'd ago';
-            
+
             return date.toLocaleDateString();
         }
-        
+
         // ========== SWIM EVENTS ==========
-        
+
         // Show/hide create event modal
         function showCreateEvent() {
             document.getElementById('createEventModal').style.display = 'block';
         }
-        
+
         function hideCreateEvent() {
             document.getElementById('createEventModal').style.display = 'none';
             document.getElementById('createEventForm').reset();
         }
-        
+
         // Load events
         async function loadEvents() {
             try {
                 console.log('Loading events...');
-                
+
                 // Query using your actual column names
                 const { data: events, error } = await supabaseClient
                     .from('swim_events')
                     .select('*')
                     .order('start_at', { ascending: true })
                     .limit(20);
-                
+
                 console.log('Events query result:', { events, error });
-                
+
                 if (error) {
                     console.error('Error loading events:', error);
-                    document.getElementById('eventsList').innerHTML = 
+                    document.getElementById('eventsList').innerHTML =
                         `<div style="color: var(--danger); text-align: center; padding: 20px;">
                             Error loading events<br>
                             <small style="font-size: 11px;">${error.message || JSON.stringify(error)}</small>
                         </div>`;
                     return;
                 }
-                
+
                 // Filter out past events
                 const now = new Date();
                 const upcomingEvents = events?.filter(e => new Date(e.start_at) >= now) || [];
-                
+
                 console.log('Upcoming events:', upcomingEvents);
-                
+
                 // If no events, show empty state
                 if (!upcomingEvents || upcomingEvents.length === 0) {
                     document.getElementById('eventsList').innerHTML = `
                         <div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">
                             <div style="font-size: 48px; margin-bottom: 16px;"><i data-lucide="waves" style="width: 48px; height: 48px;"></i></div>
-                            <div style="font-size: 16px; margin-bottom: 8px;">No upcoming swim events</div>
+                            <div style="font-size: 16px; margin-bottom: 8px;">No upcoming swims</div>
                             <div style="font-size: 13px;">Be the first to create one!</div>
                         </div>
                     `;
                     return;
                 }
-                
+
                 console.log('Successfully loaded events:', upcomingEvents);
-                
+
                 // Load creator profiles
                 const creatorIds = [...new Set(upcomingEvents.map(e => e.created_by).filter(Boolean))];
                 const { data: profilesData } = await supabaseClient
                     .from('profiles')
                     .select('id, display_name')
                     .in('id', creatorIds);
-                
+
                 const profileMap = {};
                 if (profilesData) profilesData.forEach(p => profileMap[p.id] = p);
-                
+
                 console.log('Profile map:', profileMap);
                 console.log('Creator IDs needed:', creatorIds);
-                
+
                 // Load user's RSVP status for these events
                 const eventIds = upcomingEvents.map(e => e.id);
                 const { data: userRsvps } = await supabaseClient
@@ -639,10 +661,10 @@
                     .select('event_id, rsvp')
                     .eq('user_id', currentUser.id)
                     .in('event_id', eventIds);
-                
+
                 const rsvpMap = {};
                 if (userRsvps) userRsvps.forEach(r => rsvpMap[r.event_id] = r.rsvp);
-                
+
                 // Show events with your actual data structure
                 const html = upcomingEvents.map(event => {
                     const eventDate = new Date(event.start_at);
@@ -650,7 +672,7 @@
                     const timeStr = eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                     const creatorName = profileMap[event.created_by]?.display_name || 'Anonymous';
                     const userRsvp = rsvpMap[event.id]; // Get user's RSVP status
-                    
+
                     // Build RSVP buttons based on user's status
                     let rsvpButtons;
                     if (userRsvp === 'yes') {
@@ -702,7 +724,7 @@
                             </div>
                         `;
                     }
-                    
+
                     return `
                         <div style="background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 18px; margin-bottom: 14px;">
                             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
@@ -756,65 +778,65 @@
                         </div>
                     `;
                 }).join('');
-                
+
                 document.getElementById('eventsList').innerHTML = html;
                 initIcons(); // Initialize Lucide icons
-                
+
             } catch (err) {
                 console.error('Caught error:', err);
-                document.getElementById('eventsList').innerHTML = 
+                document.getElementById('eventsList').innerHTML =
                     `<div style="color: var(--danger); text-align: center; padding: 20px;">
                         Unexpected error<br>
                         <small style="font-size: 11px;">${err.message}</small>
                     </div>`;
             }
         }
-        
+
         // Render events list
         function renderEventsList(events) {
             const container = document.getElementById('eventsList');
-            
+
             if (!events || events.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">
                         <div style="font-size: 48px; margin-bottom: 16px;"><i data-lucide="waves" style="width: 48px; height: 48px;"></i></div>
-                        <div style="font-size: 16px; margin-bottom: 8px;">No upcoming swim events</div>
+                        <div style="font-size: 16px; margin-bottom: 8px;">No upcoming swims</div>
                         <div style="font-size: 13px;">Be the first to create one!</div>
                     </div>
                 `;
                 return;
             }
-            
+
             const paceEmojis = {
                 elite: '🔥',
                 advanced: '💪',
                 intermediate: '🌊',
                 beginner: '🏊'
             };
-            
+
             const paceLabels = {
                 elite: 'Elite',
                 advanced: 'Advanced',
                 intermediate: 'Intermediate',
                 beginner: 'Beginner'
             };
-            
+
             const html = events.map(event => {
                 const eventDate = new Date(event.event_date);
                 const isToday = eventDate.toDateString() === new Date().toDateString();
                 const dateStr = isToday ? 'Today' : eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 const timeStr = eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                
+
                 const spotName = event.spot?.name || 'Unknown Location';
                 const creatorName = event.creator?.display_name || 'Anonymous';
                 const paceEmoji = paceEmojis[event.pace_level] || '🏊';
                 const paceLabel = paceLabels[event.pace_level] || event.pace_level;
-                
+
                 const confirmed = event.memberCount?.confirmed || 0;
                 const pending = event.memberCount?.pending || 0;
                 const maxPart = event.max_participants;
                 const spotsLeft = maxPart ? (maxPart - confirmed) : null;
-                
+
                 return `
                     <div style="background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 18px; margin-bottom: 14px; cursor: pointer;" onclick="viewEventDetails('${event.id}')">
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
@@ -861,15 +883,15 @@
                     </div>
                 `;
             }).join('');
-            
+
             container.innerHTML = html;
             initIcons();
         }
-        
+
         // Submit new event  
         async function submitEvent(e) {
             e.preventDefault();
-            
+
             // Get form values
             const title = document.getElementById('eventName')?.value;
             const spotSelect = document.getElementById('eventSpot');
@@ -878,11 +900,11 @@
             const paceLevel = document.getElementById('eventPaceLevel')?.value;
             const distanceKm = parseFloat(document.getElementById('eventDistance')?.value);
             const notes = document.getElementById('eventDescription')?.value;
-            
+
             // Find the spot name from the ID
             const spot = spots.find(s => s.id === spotId);
             const locationName = spot ? spot.name : spotSelect?.options[spotSelect.selectedIndex]?.text;
-            
+
             // Convert pace level to seconds per 100m
             const paceMap = {
                 'elite': 100,      // <1:45 = ~100 sec/100m
@@ -890,7 +912,7 @@
                 'intermediate': 150, // 2:15-2:45 = ~150 sec/100m
                 'beginner': 180    // >2:45 = ~180 sec/100m
             };
-            
+
             const eventData = {
                 created_by: currentUser.id,
                 title: title,
@@ -906,22 +928,22 @@
                 status: 'planned',
                 category: 'open'
             };
-            
+
             console.log('Creating event:', eventData);
-            
+
             const { data, error } = await supabaseClient
                 .from('swim_events')
                 .insert([eventData])
                 .select();
-            
+
             if (error) {
                 alert('Error creating event: ' + error.message);
                 console.error('Event creation error:', error);
                 return;
             }
-            
+
             console.log('Event created:', data);
-            
+
             // Auto-join creator as organizer
             if (data && data[0]) {
                 try {
@@ -937,12 +959,13 @@
                     console.error('Could not auto-join event:', err);
                 }
             }
-            
-            alert('🎉 Event created successfully!');
+
+
+            alert('🎉 Swim created successfully!');
             hideCreateEvent();
             loadEvents();
         }
-        
+
         // View event details (placeholder)
         // RSVP to event
         async function rsvpToEvent(eventId, rsvpStatus) {
@@ -954,14 +977,14 @@
                     .eq('event_id', eventId)
                     .eq('user_id', currentUser.id)
                     .maybeSingle();
-                
+
                 if (existing) {
                     // Update existing RSVP
                     const { error } = await supabaseClient
                         .from('swim_event_members')
                         .update({ rsvp: rsvpStatus })
                         .eq('id', existing.id);
-                    
+
                     if (error) throw error;
                 } else {
                     // Create new RSVP
@@ -973,86 +996,86 @@
                             role: 'member',
                             rsvp: rsvpStatus
                         });
-                    
+
                     if (error) throw error;
                 }
-                
+
                 // Show success message
                 if (rsvpStatus === 'yes') {
                     alert('🎉 You\'re going! See you there!');
                 } else {
                     alert('👍 Marked as maybe. You can confirm later.');
                 }
-                
+
                 // Reload events to update UI
                 await loadEvents();
-                
+
             } catch (error) {
                 console.error('Error RSVPing:', error);
                 alert('Error updating RSVP: ' + error.message);
             }
         }
-        
+
         // View event (compatibility function)
         function viewEvent(eventId) {
             showEventDetails(eventId);
         }
-        
+
         // View event details (wrapper for compatibility)
         async function viewEventDetails(eventId) {
             await showEventDetails(eventId);
         }
-        
+
         // Show event details modal
         async function showEventDetails(eventId) {
             // Find the event
             const event = await loadEventDetails(eventId);
             if (!event) return;
-            
+
             document.getElementById('eventDetailsModal').style.display = 'block';
             renderEventDetails(event);
         }
-        
+
         function hideEventDetails() {
             document.getElementById('eventDetailsModal').style.display = 'none';
         }
-        
+
         async function loadEventDetails(eventId) {
             try {
                 console.log('Loading event details for:', eventId);
-                
+
                 const { data: event, error } = await supabaseClient
                     .from('swim_events')
                     .select('*')
                     .eq('id', eventId)
                     .single();
-                
+
                 if (error) throw error;
-                
+
                 console.log('Event loaded:', event);
-                
+
                 // Load creator profile
                 const { data: creatorProfile, error: creatorError } = await supabaseClient
                     .from('profiles')
                     .select('display_name')
                     .eq('id', event.created_by)
                     .maybeSingle();
-                
+
                 if (creatorError) {
                     console.error('Error loading creator:', creatorError);
                 }
-                
+
                 event.creatorName = creatorProfile?.display_name || 'Anonymous';
                 console.log('Creator:', event.creatorName);
-                
+
                 // Load participants - simple query without join
                 const { data: members, error: membersError } = await supabaseClient
                     .from('swim_event_members')
                     .select('*')
                     .eq('event_id', eventId);
-                
+
                 console.log('Members loaded:', { members, membersError });
-                
+
                 // Load profiles for these members separately
                 if (members && members.length > 0) {
                     const userIds = members.map(m => m.user_id);
@@ -1060,23 +1083,23 @@
                         .from('profiles')
                         .select('id, display_name')
                         .in('id', userIds);
-                    
+
                     console.log('Profiles loaded:', profiles);
-                    
+
                     // Attach profiles to members
                     members.forEach(member => {
                         const profile = profiles?.find(p => p.id === member.user_id);
                         member.profiles = profile;
                     });
                 }
-                
+
                 event.members = members || [];
-                
+
                 // Check if current user is attending
                 event.userRsvp = members?.find(m => m.user_id === currentUser.id)?.rsvp;
-                
+
                 console.log('User RSVP status:', event.userRsvp);
-                
+
                 return event;
             } catch (err) {
                 console.error('Error loading event:', err);
@@ -1084,12 +1107,12 @@
                 return null;
             }
         }
-        
+
         function renderEventDetails(event) {
             const eventDate = new Date(event.start_at);
             const attending = event.members.filter(m => m.rsvp === 'yes').length;
             const maybe = event.members.filter(m => m.rsvp === 'maybe').length;
-            
+
             const html = `
                 <div style="margin-bottom: 20px;">
                     <h2 style="font-size: 24px; color: var(--text-primary); margin-bottom: 8px;">${event.title || 'Group Swim'}</h2>
@@ -1105,8 +1128,8 @@
                     <div style="margin-bottom: 12px;">
                         <span style="color: var(--text-secondary); font-size: 13px;"><i data-lucide="calendar" style="width: 14px; height: 14px; vertical-align: middle;"></i> DATE & TIME</span>
                         <div style="color: var(--text-primary); font-size: 16px; font-weight: 600; margin-top: 4px;">
-                            ${eventDate.toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'})}
-                            <br>${eventDate.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}
+                            ${eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                            <br>${eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                     </div>
                     
@@ -1127,37 +1150,37 @@
                 
                 <div style="background: rgba(56, 189, 248, 0.1); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
                     <div style="font-weight: 600; color: var(--ocean-light); margin-bottom: 12px;"><i data-lucide="users" style="width: 14px; height: 14px; vertical-align: middle;"></i> Participants (${attending}${maybe > 0 ? ` + ${maybe} maybe` : ''})</div>
-                    ${event.members.length > 0 ? 
-                        event.members.map(m => `
+                    ${event.members.length > 0 ?
+                    event.members.map(m => `
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                                 <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--ocean-blue); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
                                     ${m.profiles?.display_name?.charAt(0) || '?'}
                                 </div>
                                 <div style="flex: 1;">
                                     <div style="color: var(--text-primary); font-size: 14px;">${m.profiles?.display_name || 'Anonymous'}</div>
-                                    ${m.role === 'organizer' ? '<div style="color: var(--ocean-light); font-size: 12px;">Organizer</div>' : ''}
+                                    ${m.role === 'organizer' ? '<div style="color: var(--ocean-light); font-size: 12px;">Swim Host</div>' : ''}
                                 </div>
                                 <div style="color: var(--text-secondary); font-size: 12px;">
                                     ${m.rsvp === 'yes' ? '✓ Going' : m.rsvp === 'maybe' ? '? Maybe' : ''}
                                 </div>
                             </div>
                         `).join('')
-                        : '<div style="color: var(--text-secondary); font-size: 13px;">No one has joined yet. Be the first!</div>'
-                    }
+                    : '<div style="color: var(--text-secondary); font-size: 13px;">No one has joined yet. Be the first!</div>'
+                }
                 </div>
                 
                 <div id="eventDetailsActions"></div>
             `;
-            
+
             document.getElementById('eventDetailsContent').innerHTML = html;
-            
+
             // Render action buttons
             renderEventActions(event);
         }
-        
+
         function renderEventActions(event) {
             const container = document.getElementById('eventDetailsActions');
-            
+
             if (event.userRsvp === 'yes') {
                 container.innerHTML = `
                     <button class="btn" style="background: var(--success);" disabled>✓ You're Going</button>
@@ -1175,11 +1198,11 @@
                 `;
             }
         }
-        
+
         async function joinEvent(eventId, rsvp) {
             try {
                 console.log('Joining event:', eventId, 'with RSVP:', rsvp);
-                
+
                 // Check if already a member
                 const { data: existing, error: checkError } = await supabaseClient
                     .from('swim_event_members')
@@ -1187,26 +1210,26 @@
                     .eq('event_id', eventId)
                     .eq('user_id', currentUser.id)
                     .maybeSingle();
-                
+
                 if (checkError) {
                     console.error('Error checking membership:', checkError);
                     throw checkError;
                 }
-                
+
                 console.log('Existing membership:', existing);
-                
+
                 if (existing) {
                     // Update existing RSVP
                     const { error } = await supabaseClient
                         .from('swim_event_members')
                         .update({ rsvp: rsvp })
                         .eq('id', existing.id);
-                    
+
                     if (error) throw error;
                 } else {
                     // Create new membership
                     console.log('Creating new membership for user:', currentUser.id);
-                    
+
                     const { data: inserted, error } = await supabaseClient
                         .from('swim_event_members')
                         .insert({
@@ -1216,19 +1239,19 @@
                             rsvp: rsvp
                         })
                         .select();
-                    
+
                     console.log('Insert result:', { inserted, error });
-                    
+
                     if (error) throw error;
                 }
-                
+
                 console.log('Successfully joined event:', eventId, 'with RSVP:', rsvp);
-                
+
                 // FORCE refresh event details modal if it's open
                 const modal = document.getElementById('eventDetailsModal');
                 console.log('Modal element:', modal);
                 console.log('Modal display:', modal ? modal.style.display : 'modal not found');
-                
+
                 if (modal && modal.style.display === 'block') {
                     console.log('Modal is open - refreshing...');
                     // Force refresh by reloading event details
@@ -1237,9 +1260,9 @@
                 } else {
                     console.log('Modal not open, skipping refresh');
                 }
-                
+
                 showToast(rsvp === 'yes' ? '🎉 You\'re in!' : '👍 Marked as maybe', 'success');
-                
+
                 loadEvents(); // Refresh list
                 loadDashboard(); // Refresh dashboard
             } catch (err) {
@@ -1247,34 +1270,34 @@
                 alert('Error joining event: ' + err.message);
             }
         }
-        
+
         async function leaveEvent(eventId) {
             if (!confirm('Leave this swim?')) return;
-            
+
             try {
                 const { error } = await supabaseClient
                     .from('swim_event_members')
                     .delete()
                     .eq('event_id', eventId)
                     .eq('user_id', currentUser.id);
-                
+
                 if (error) throw error;
-                
+
                 showToast('👋 You\'ve left the swim', 'info');
-                
+
                 // Refresh event details modal if it's open
                 const modal = document.getElementById('eventDetailsModal');
                 if (modal && modal.style.display === 'block') {
                     await showEventDetails(eventId); // Refresh the modal
                 }
-                
+
                 loadEvents(); // Refresh events list
                 loadDashboard(); // Refresh dashboard
             } catch (err) {
                 alert('Error leaving event: ' + err.message);
             }
         }
-        
+
         // Show running late options
         function showRunningLate(eventId) {
             const options = [
@@ -1284,20 +1307,20 @@
                 { label: 'Just leaving now', value: 20 },
                 { label: 'Cancel - can\'t make it', value: null }
             ];
-            
+
             const optionsText = options.map((o, i) => `${i + 1}. ${o.label}`).join('\n');
             const choice = prompt(`Running late due to traffic?\n\n${optionsText}\n\nEnter number (1-${options.length}):`);
-            
+
             if (!choice) return; // Cancelled
-            
+
             const selectedIndex = parseInt(choice) - 1;
             if (selectedIndex < 0 || selectedIndex >= options.length) {
                 alert('Invalid choice');
                 return;
             }
-            
+
             const selected = options[selectedIndex];
-            
+
             if (selected.value === null) {
                 // User chose to cancel
                 leaveEvent(eventId);
@@ -1306,7 +1329,7 @@
                 markRunningLate(eventId, selected.value, selected.label);
             }
         }
-        
+
         // Mark user as running late
         async function markRunningLate(eventId, minutes, label) {
             try {
@@ -1317,26 +1340,26 @@
                     .eq('event_id', eventId)
                     .eq('user_id', currentUser.id)
                     .single();
-                
+
                 if (!existing) {
                     alert('Error: Not found as member');
                     return;
                 }
-                
+
                 // For now, we'll just show a toast
                 // In future, we could store this in a 'status' field or send notifications
                 showToast(`⏰ Marked as ${label}. Others will be notified!`, 'info');
-                
+
                 // Could add: Update database with status
                 // Could add: Send notification to other participants
                 // Could add: Show on event details
-                
+
             } catch (err) {
                 console.error('Error marking late:', err);
                 alert('Error updating status: ' + err.message);
             }
         }
-        
+
         function showToast(message, type) {
             // Simple toast notification
             const toast = document.createElement('div');
@@ -1355,19 +1378,19 @@
             `;
             toast.textContent = message;
             document.body.appendChild(toast);
-            
+
             setTimeout(() => {
                 toast.style.animation = 'slideDown 0.3s ease';
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
-        
+
         // ========== PROFILE SETTINGS ==========
-        
+
         async function showProfileSettings() {
             document.getElementById('profileModal').style.display = 'block';
             document.getElementById('profileEmail').textContent = currentUser.email;
-            
+
             // Load current profile
             try {
                 const { data: profile } = await supabaseClient
@@ -1375,19 +1398,19 @@
                     .select('*')
                     .eq('id', currentUser.id)
                     .single();
-                
+
                 if (profile) {
                     document.getElementById('profileDisplayName').value = profile.display_name || '';
                     document.getElementById('profileHomeBeach').value = profile.home_beach_id || '';
                     document.getElementById('profileColdTolerance').value = profile.cold_tolerance_min_c || '';
-                    
+
                     // Convert seconds to mm:ss format
                     if (profile.pool_1km_time_seconds) {
                         const mins = Math.floor(profile.pool_1km_time_seconds / 60);
                         const secs = profile.pool_1km_time_seconds % 60;
                         document.getElementById('profilePoolTime').value = `${mins}:${secs.toString().padStart(2, '0')}`;
                     }
-                    
+
                     if (profile.ocean_1km_time_seconds) {
                         const mins = Math.floor(profile.ocean_1km_time_seconds / 60);
                         const secs = profile.ocean_1km_time_seconds % 60;
@@ -1398,23 +1421,23 @@
                 console.error('Error loading profile:', err);
             }
         }
-        
+
         function hideProfileSettings() {
             document.getElementById('profileModal').style.display = 'none';
         }
-        
+
         async function saveProfile() {
             const displayName = document.getElementById('profileDisplayName').value;
             const homeBeachId = document.getElementById('profileHomeBeach').value;
             const coldTolerance = document.getElementById('profileColdTolerance').value;
             const poolTime = document.getElementById('profilePoolTime').value;
             const oceanTime = document.getElementById('profileOceanTime').value;
-            
+
             if (!displayName) {
                 alert('Please enter a display name');
                 return;
             }
-            
+
             // Convert mm:ss to seconds
             const parseTime = (timeStr) => {
                 if (!timeStr) return null;
@@ -1422,7 +1445,7 @@
                 if (parts.length !== 2) return null;
                 return parseInt(parts[0]) * 60 + parseInt(parts[1]);
             };
-            
+
             const profileData = {
                 display_name: displayName,
                 home_beach_id: homeBeachId || null,
@@ -1430,15 +1453,15 @@
                 pool_1km_time_seconds: parseTime(poolTime),
                 ocean_1km_time_seconds: parseTime(oceanTime)
             };
-            
+
             try {
                 const { error } = await supabaseClient
                     .from('profiles')
                     .update(profileData)
                     .eq('id', currentUser.id);
-                
+
                 if (error) throw error;
-                
+
                 showToast('✅ Profile updated!', 'success');
                 hideProfileSettings();
                 loadDashboard(); // Refresh dashboard
@@ -1447,34 +1470,34 @@
                 alert('Error saving profile: ' + err.message);
             }
         }
-        
+
         // ===== ONBOARDING FUNCTIONS =====
-        
+
         function showOnboardingLegal() {
             document.getElementById('onboardingLegal').style.display = 'block';
             document.getElementById('onboardingPersonal').style.display = 'none';
             setTimeout(() => initIcons(), 100);
         }
-        
+
         function showOnboardingPersonal() {
             document.getElementById('onboardingLegal').style.display = 'none';
             document.getElementById('onboardingPersonal').style.display = 'block';
             setTimeout(() => initIcons(), 100);
         }
-        
+
         function checkOnboardingBoxes() {
             const terms = document.getElementById('obTerms').checked;
             const privacy = document.getElementById('obPrivacy').checked;
             const waiver = document.getElementById('obWaiver').checked;
             const data = document.getElementById('obData').checked;
-            
+
             const btn = document.getElementById('obAcceptBtn');
             const allChecked = terms && privacy && waiver && data;
             btn.disabled = !allChecked;
             btn.style.opacity = allChecked ? '1' : '0.5';
             btn.style.cursor = allChecked ? 'pointer' : 'not-allowed';
         }
-        
+
         // Consent document content (embedded for file:// compatibility)
         const consentDocuments = {
             terms: {
@@ -1702,47 +1725,47 @@
 `
             }
         };
-        
+
         function openConsentModal(docType) {
             const doc = consentDocuments[docType];
             if (!doc) return;
-            
+
             document.getElementById('consentModalTitle').textContent = doc.title;
             document.getElementById('consentModalBody').innerHTML = doc.content;
-            
+
             const modal = document.getElementById('consentModal');
             modal.style.display = 'flex';
         }
-        
+
         function closeConsentModal() {
             document.getElementById('consentModal').style.display = 'none';
         }
-        
+
         // ESC key to close modal
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 closeConsentModal();
             }
         });
-        
+
         // Click outside modal to close
-        document.getElementById('consentModal')?.addEventListener('click', function(e) {
+        document.getElementById('consentModal')?.addEventListener('click', function (e) {
             if (e.target === this) {
                 closeConsentModal();
             }
         });
-        
+
         async function acceptOnboardingLegal() {
             try {
                 const now = new Date().toISOString();
-                
+
                 // Check if profile exists
                 const { data: existing } = await supabaseClient
                     .from('profiles')
                     .select('id')
                     .eq('id', currentUser.id)
                     .maybeSingle();
-                
+
                 if (existing) {
                     const { error } = await supabaseClient
                         .from('profiles')
@@ -1753,7 +1776,7 @@
                             data_consent_at: now
                         })
                         .eq('id', currentUser.id);
-                    
+
                     if (error) throw error;
                 } else {
                     const { error } = await supabaseClient
@@ -1766,17 +1789,17 @@
                             waiver_accepted_at: now,
                             data_consent_at: now
                         });
-                    
+
                     if (error) throw error;
                 }
-                
+
                 showOnboardingPersonal();
             } catch (err) {
                 console.error('Error accepting legal:', err);
                 alert('Error: ' + err.message);
             }
         }
-        
+
         async function saveOnboardingPersonal() {
             const fullName = document.getElementById('obFullName').value.trim();
             const phone = document.getElementById('obPhone').value.trim();
@@ -1784,12 +1807,12 @@
             const address = document.getElementById('obAddress').value.trim();
             const city = document.getElementById('obCity').value.trim();
             const postal = document.getElementById('obPostal').value.trim();
-            
+
             if (!fullName || !phone || !dob || !address || !city || !postal) {
                 alert('Please fill in all required fields');
                 return;
             }
-            
+
             try {
                 const { error } = await supabaseClient
                     .from('profiles')
@@ -1803,14 +1826,14 @@
                         onboarding_completed_at: new Date().toISOString()
                     })
                     .eq('id', currentUser.id);
-                
+
                 if (error) throw error;
-                
+
                 // Hide onboarding, show main app
                 document.getElementById('onboardingLegal').style.display = 'none';
                 document.getElementById('onboardingPersonal').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
-                
+
                 await loadSpots();
                 await loadDashboard();
                 initIcons();
@@ -1819,48 +1842,53 @@
                 alert('Error: ' + err.message);
             }
         }
-        
+
         // ===== END ONBOARDING =====
-        
+
         // GPS State
         let currentGpsLocation = null;
-        
+
         // Get current GPS location
         async function getCurrentLocation() {
             const btn = document.getElementById('gpsButton');
             const status = document.getElementById('gpsStatus');
-            
+
             if (!navigator.geolocation) {
                 alert('GPS not supported on this device');
                 return;
             }
-            
+
             btn.disabled = true;
             btn.innerHTML = '<i data-lucide="loader" style="width: 14px; height: 14px; animation: spin 1s linear infinite;"></i> Getting location...';
             status.textContent = 'Detecting...';
             status.style.color = 'var(--warning)';
-            
+
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
                     currentGpsLocation = { lat, lng };
-                    
+
                     // Find nearest spot
                     const nearest = findNearestSpot(lat, lng);
-                    
+
                     if (nearest) {
-                        // Select the nearest spot in dropdown
-                        const select = document.querySelector('#logTemp select[data-spots]');
-                        select.value = nearest.spot.id;
-                        
+                        // Store suggested ID
+                        gpsSuggestedSpotId = nearest.spot.id;
+
+                        // Select the nearest spot in dropdown ONLY if not locked
+                        if (!selectedSpotLocked) {
+                            const select = document.querySelector('#logTemp select[data-spots]');
+                            if (select) select.value = nearest.spot.id;
+                        }
+
                         status.innerHTML = `📍 ${nearest.spot.name} (${nearest.distance.toFixed(1)}km away)`;
                         status.style.color = 'var(--success)';
                     } else {
                         status.textContent = `📍 ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
                         status.style.color = 'var(--ocean-light)';
                     }
-                    
+
                     btn.disabled = false;
                     btn.innerHTML = '<i data-lucide="map-pin" style="width: 14px; height: 14px;"></i> Update Location';
                     initIcons();
@@ -1872,7 +1900,7 @@
                     btn.disabled = false;
                     btn.innerHTML = '<i data-lucide="map-pin" style="width: 14px; height: 14px;"></i> Use My Location';
                     initIcons();
-                    
+
                     if (error.code === 1) {
                         alert('Please allow location access to use GPS');
                     }
@@ -1880,26 +1908,26 @@
                 { enableHighAccuracy: true, timeout: 10000 }
             );
         }
-        
+
         // Calculate distance between two points (Haversine formula)
         function getDistanceKm(lat1, lng1, lat2, lng2) {
             const R = 6371; // Earth's radius in km
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLng = (lng2 - lng1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLng/2) * Math.sin(dLng/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
         }
-        
+
         // Find nearest spot to GPS coordinates
         function findNearestSpot(lat, lng) {
             if (!spots || spots.length === 0) return null;
-            
+
             let nearest = null;
             let minDistance = Infinity;
-            
+
             for (const spot of spots) {
                 const distance = getDistanceKm(lat, lng, spot.latitude, spot.longitude);
                 if (distance < minDistance) {
@@ -1907,26 +1935,34 @@
                     nearest = { spot, distance };
                 }
             }
-            
+
             // Only return if within 10km (reasonable for Cape Town spots)
             return minDistance <= 10 ? nearest : null;
         }
-        
+
         // Submit temperature log
         async function submitTempLog() {
             const spotId = document.querySelector('#logTemp select[data-spots]').value;
             const temp = parseFloat(document.getElementById('tempValue').textContent);
             const conditionsRaw = document.querySelector('#logTemp .toggle-btn.active')?.textContent.trim() || '😌 Calm';
-            
+
             // Remove emojis and extract just the word (calm, choppy, rough, extreme)
             const conditions = conditionsRaw.replace(/[^\w\s]/g, '').trim().toLowerCase();
-            
+
             // Get selected hazards and remove emojis
             const hazards = Array.from(document.querySelectorAll('#logTemp .toggle-group:last-of-type .toggle-btn.active'))
                 .map(btn => btn.textContent.replace(/[^\w\s]/g, '').trim().toLowerCase());
-            
+
             const notes = document.querySelector('#logTemp textarea').value;
-            
+
+            // Determine location source
+            let locationSource = 'fallback';
+            if (selectedSpotLocked) {
+                locationSource = 'manual';
+            } else if (currentGpsLocation) {
+                locationSource = 'gps';
+            }
+
             // Build insert object
             const logData = {
                 user_id: currentUser.id,
@@ -1934,43 +1970,47 @@
                 temp_c: temp,
                 conditions: conditions,
                 hazards: hazards,
-                notes: notes
+                notes: notes,
+                location_source: locationSource,
+                gps_spot_id: gpsSuggestedSpotId
             };
-            
+
             // Add GPS coordinates if available (for future custom spots feature)
             // Note: Could store in notes or a separate field later
             if (currentGpsLocation) {
                 logData.lat = currentGpsLocation.lat;
                 logData.lng = currentGpsLocation.lng;
-                logData.notes = (notes ? notes + '\n' : '') + 
+                logData.notes = (notes ? notes + '\n' : '') +
                     `[GPS: ${currentGpsLocation.lat.toFixed(5)}, ${currentGpsLocation.lng.toFixed(5)}]`;
             }
-            
+
             const { data, error } = await supabaseClient
                 .from('temp_logs')
                 .insert(logData);
-            
+
             if (error) {
                 alert('Error logging temperature: ' + error.message);
                 console.error(error);
             } else {
                 alert('🎉 Temperature logged successfully!\n\n+10 points!\n\nKeep up the streak! 🔥');
-                
-                // Reset GPS state
+
+                // Reset GPS and Lock state
+                selectedSpotLocked = false;
+                gpsSuggestedSpotId = null;
                 currentGpsLocation = null;
                 const status = document.getElementById('gpsStatus');
                 if (status) status.textContent = '';
-                
+
                 // Switch to dashboard
                 showPage('dashboard');
                 await loadDashboard();
             }
         }
-        
+
         // Initialize on page load
         window.addEventListener('DOMContentLoaded', checkAuth);
     </script>
-    
+
     <style>
         * {
             margin: 0;
@@ -2008,7 +2048,7 @@
             left: -50%;
             width: 200%;
             height: 200%;
-            background: 
+            background:
                 radial-gradient(circle at 20% 80%, rgba(2, 132, 199, 0.1) 0%, transparent 50%),
                 radial-gradient(circle at 80% 20%, rgba(56, 189, 248, 0.08) 0%, transparent 50%);
             animation: pulse 20s ease-in-out infinite;
@@ -2017,8 +2057,17 @@
         }
 
         @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.3; }
-            50% { transform: scale(1.1); opacity: 0.5; }
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.3;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.5;
+            }
         }
 
         .container {
@@ -2209,6 +2258,12 @@
             z-index: 100;
         }
 
+
+        .nav-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+
         .nav-tab {
             flex: 1;
             padding: 12px 16px;
@@ -2228,12 +2283,21 @@
             color: white;
             box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
         }
-        
         @media (max-width: 520px) {
-            .nav-tabs {
-                flex-wrap: wrap;
-                gap: 6px;
-            }
+          .nav-tabs {
+            flex-wrap: wrap;
+            gap: 6px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .nav-tab {
+            flex: 1 1 30%;
+            min-width: 0;
+            padding: 10px 8px;
+            font-size: 13px;
+          }
+        }
             .nav-tab {
                 flex: 1 1 30%;
                 min-width: 0;
@@ -2252,13 +2316,25 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .card {
@@ -2426,12 +2502,14 @@
         }
     </style>
 </head>
+
 <body>
     <!-- AUTH SCREEN -->
     <div id="authScreen">
         <div class="auth-card">
             <div class="auth-logo">
-                <h1><i data-lucide="waves" style="width: 32px; height: 32px; vertical-align: middle;"></i> SwimLoading</h1>
+                <h1><i data-lucide="waves" style="width: 32px; height: 32px; vertical-align: middle;"></i> SwimLoading
+                </h1>
                 <p>Cape Town Ocean Swimming Community</p>
             </div>
 
@@ -2473,133 +2551,229 @@
     </div>
 
     <!-- ONBOARDING SCREENS -->
-    <div id="onboardingLegal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); overflow-y: auto; z-index: 9999;">
+    <div id="onboardingLegal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); overflow-y: auto; z-index: 9999;">
         <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;">
             <div style="max-width: 600px; width: 100%;">
                 <div style="text-align: center; margin-bottom: 32px;">
-                    <div style="font-size: 48px; margin-bottom: 16px;"><i data-lucide="waves" style="width: 48px; height: 48px; color: #38bdf8; stroke-width: 2;"></i></div>
-                    <h2 style="font-size: 28px; color: #f8fafc; margin: 0 0 8px 0; font-family: system-ui, -apple-system, sans-serif;">Before You Dive In...</h2>
-                    <p style="color: #94a3b8; margin: 0; font-family: system-ui, -apple-system, sans-serif;">Please review and accept the following</p>
+                    <div style="font-size: 48px; margin-bottom: 16px;"><i data-lucide="waves"
+                            style="width: 48px; height: 48px; color: #38bdf8; stroke-width: 2;"></i></div>
+                    <h2
+                        style="font-size: 28px; color: #f8fafc; margin: 0 0 8px 0; font-family: system-ui, -apple-system, sans-serif;">
+                        Before You Dive In...</h2>
+                    <p style="color: #94a3b8; margin: 0; font-family: system-ui, -apple-system, sans-serif;">Please
+                        review and accept the following</p>
                 </div>
-                
-                <div style="background: rgba(15, 23, 42, 0.8); border-radius: 16px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.1);">
-                    
-                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; transition: background 0.2s; margin-bottom: 12px;" onmouseover="this.style.background='rgba(56,189,248,0.1)'" onmouseout="this.style.background='transparent'">
-                        <input type="checkbox" id="obTerms" onchange="checkOnboardingBoxes()" style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
+
+                <div
+                    style="background: rgba(15, 23, 42, 0.8); border-radius: 16px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.1);">
+
+                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; transition: background 0.2s; margin-bottom: 12px;"
+                        onmouseover="this.style.background='rgba(56,189,248,0.1)'"
+                        onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" id="obTerms" onchange="checkOnboardingBoxes()"
+                            style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="flex: 1;">
-                            <div style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;">
-                                <label for="obTerms" style="cursor: pointer;"><i data-lucide="scroll-text" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Terms of Service</label>
-                                <a href="#" onclick="openConsentModal('terms'); return false;" style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
+                            <div
+                                style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;">
+                                <label for="obTerms" style="cursor: pointer;"><i data-lucide="scroll-text"
+                                        style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i>
+                                    Terms of Service</label>
+                                <a href="#" onclick="openConsentModal('terms'); return false;"
+                                    style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
                             </div>
-                            <label for="obTerms" style="cursor: pointer;"><div style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">I understand the rules and responsibilities</div></label>
+                            <label for="obTerms" style="cursor: pointer;">
+                                <div
+                                    style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">
+                                    I understand the rules and responsibilities</div>
+                            </label>
                         </div>
                     </div>
-                    
-                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; transition: background 0.2s; margin-bottom: 12px;" onmouseover="this.style.background='rgba(56,189,248,0.1)'" onmouseout="this.style.background='transparent'">
-                        <input type="checkbox" id="obPrivacy" onchange="checkOnboardingBoxes()" style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
+
+                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; transition: background 0.2s; margin-bottom: 12px;"
+                        onmouseover="this.style.background='rgba(56,189,248,0.1)'"
+                        onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" id="obPrivacy" onchange="checkOnboardingBoxes()"
+                            style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="flex: 1;">
-                            <div style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;">
-                                <label for="obPrivacy" style="cursor: pointer;"><i data-lucide="shield-check" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Privacy Policy (POPIA)</label>
-                                <a href="#" onclick="openConsentModal('privacy'); return false;" style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
+                            <div
+                                style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;">
+                                <label for="obPrivacy" style="cursor: pointer;"><i data-lucide="shield-check"
+                                        style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i>
+                                    Privacy Policy (POPIA)</label>
+                                <a href="#" onclick="openConsentModal('privacy'); return false;"
+                                    style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
                             </div>
-                            <label for="obPrivacy" style="cursor: pointer;"><div style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">I understand how my data is used</div></label>
+                            <label for="obPrivacy" style="cursor: pointer;">
+                                <div
+                                    style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">
+                                    I understand how my data is used</div>
+                            </label>
                         </div>
                     </div>
-                    
-                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 2px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05);">
-                        <input type="checkbox" id="obWaiver" onchange="checkOnboardingBoxes()" style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
+
+                    <div
+                        style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 2px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05);">
+                        <input type="checkbox" id="obWaiver" onchange="checkOnboardingBoxes()"
+                            style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="flex: 1;">
-                            <div style="color: #ef4444; font-weight: 600; margin-bottom: 8px; font-family: system-ui, -apple-system, sans-serif;">
-                                <label for="obWaiver" style="cursor: pointer;"><i data-lucide="alert-triangle" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Liability Waiver</label>
-                                <a href="#" onclick="openConsentModal('waiver'); return false;" style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
+                            <div
+                                style="color: #ef4444; font-weight: 600; margin-bottom: 8px; font-family: system-ui, -apple-system, sans-serif;">
+                                <label for="obWaiver" style="cursor: pointer;"><i data-lucide="alert-triangle"
+                                        style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i>
+                                    Liability Waiver</label>
+                                <a href="#" onclick="openConsentModal('waiver'); return false;"
+                                    style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
                             </div>
-                            <label for="obWaiver" style="cursor: pointer;"><div style="color: #cbd5e1; font-size: 12px; font-family: system-ui, -apple-system, sans-serif;">⚠️ Ocean swimming is dangerous. I may be seriously injured or killed. SwimLoading assumes ZERO liability.</div></label>
+                            <label for="obWaiver" style="cursor: pointer;">
+                                <div
+                                    style="color: #cbd5e1; font-size: 12px; font-family: system-ui, -apple-system, sans-serif;">
+                                    ⚠️ Ocean swimming is dangerous. I may be seriously injured or killed. SwimLoading
+                                    assumes ZERO liability.</div>
+                            </label>
                         </div>
                     </div>
-                    
-                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='rgba(56,189,248,0.1)'" onmouseout="this.style.background='transparent'">
-                        <input type="checkbox" id="obData" onchange="checkOnboardingBoxes()" style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
+
+                    <div style="display: flex; gap: 12px; padding: 16px; border-radius: 8px; transition: background 0.2s;"
+                        onmouseover="this.style.background='rgba(56,189,248,0.1)'"
+                        onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" id="obData" onchange="checkOnboardingBoxes()"
+                            style="margin-top: 4px; width: 18px; height: 18px; cursor: pointer;">
                         <div style="flex: 1;">
-                            <div style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;">
-                                <label for="obData" style="cursor: pointer;"><i data-lucide="database" style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i> Data Consent</label>
-                                <a href="#" onclick="openConsentModal('data'); return false;" style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
+                            <div
+                                style="color: #f8fafc; font-weight: 600; margin-bottom: 4px; font-family: system-ui, -apple-system, sans-serif;">
+                                <label for="obData" style="cursor: pointer;"><i data-lucide="database"
+                                        style="width: 16px; height: 16px; vertical-align: middle; stroke-width: 2;"></i>
+                                    Data Consent</label>
+                                <a href="#" onclick="openConsentModal('data'); return false;"
+                                    style="margin-left: 8px; font-size: 12px; color: #38bdf8; text-decoration: none;">View</a>
                             </div>
-                            <label for="obData" style="cursor: pointer;"><div style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">I consent to data collection for safety</div></label>
+                            <label for="obData" style="cursor: pointer;">
+                                <div
+                                    style="color: #94a3b8; font-size: 13px; font-family: system-ui, -apple-system, sans-serif;">
+                                    I consent to data collection for safety</div>
+                            </label>
                         </div>
                     </div>
-                    
+
                 </div>
-                
-                <button id="obAcceptBtn" onclick="acceptOnboardingLegal()" disabled style="width: 100%; padding: 16px; font-size: 16px; font-weight: 600; background: #38bdf8; color: white; border: none; border-radius: 8px; cursor: not-allowed; opacity: 0.5; font-family: system-ui, -apple-system, sans-serif;">Accept All & Continue</button>
-                
+
+                <button id="obAcceptBtn" onclick="acceptOnboardingLegal()" disabled
+                    style="width: 100%; padding: 16px; font-size: 16px; font-weight: 600; background: #38bdf8; color: white; border: none; border-radius: 8px; cursor: not-allowed; opacity: 0.5; font-family: system-ui, -apple-system, sans-serif;">Accept
+                    All & Continue</button>
+
                 <div style="text-align: center; margin-top: 16px;">
-                    <button onclick="signOut()" style="background: transparent; border: 1px solid #64748b; color: #94a3b8; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: system-ui, -apple-system, sans-serif;">Cancel</button>
+                    <button onclick="signOut()"
+                        style="background: transparent; border: 1px solid #64748b; color: #94a3b8; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: system-ui, -apple-system, sans-serif;">Cancel</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Consent Document Modal -->
-    <div id="consentModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
-        <div style="background: #1e293b; border-radius: 16px; max-width: 600px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.1);">
-            <div style="padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
-                <h3 id="consentModalTitle" style="margin: 0; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif;"></h3>
-                <button onclick="closeConsentModal()" style="background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
+    <div id="consentModal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
+        <div
+            style="background: #1e293b; border-radius: 16px; max-width: 600px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.1);">
+            <div
+                style="padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h3 id="consentModalTitle"
+                    style="margin: 0; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif;"></h3>
+                <button onclick="closeConsentModal()"
+                    style="background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
             </div>
-            <div id="consentModalBody" style="padding: 24px; overflow-y: auto; flex: 1; color: #cbd5e1; font-size: 14px; line-height: 1.6; font-family: system-ui, -apple-system, sans-serif;"></div>
+            <div id="consentModalBody"
+                style="padding: 24px; overflow-y: auto; flex: 1; color: #cbd5e1; font-size: 14px; line-height: 1.6; font-family: system-ui, -apple-system, sans-serif;">
+            </div>
             <div style="padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.1);">
-                <button onclick="closeConsentModal()" style="width: 100%; padding: 12px; background: #38bdf8; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-family: system-ui, -apple-system, sans-serif;">Close</button>
+                <button onclick="closeConsentModal()"
+                    style="width: 100%; padding: 12px; background: #38bdf8; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-family: system-ui, -apple-system, sans-serif;">Close</button>
             </div>
         </div>
     </div>
 
-    <div id="onboardingPersonal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); overflow-y: auto; z-index: 9999;">
+    <div id="onboardingPersonal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); overflow-y: auto; z-index: 9999;">
         <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;">
             <div style="max-width: 600px; width: 100%;">
                 <div style="text-align: center; margin-bottom: 32px;">
-                    <div style="font-size: 48px; margin-bottom: 16px;"><i data-lucide="user" style="width: 48px; height: 48px; color: #38bdf8; stroke-width: 2;"></i></div>
-                    <h2 style="font-size: 28px; color: #f8fafc; margin: 0 0 8px 0; font-family: system-ui, -apple-system, sans-serif;">Let's Get to Know You</h2>
-                    <p style="color: #94a3b8; margin: 0; font-family: system-ui, -apple-system, sans-serif;">We need this for safety and emergency purposes</p>
+                    <div style="font-size: 48px; margin-bottom: 16px;"><i data-lucide="user"
+                            style="width: 48px; height: 48px; color: #38bdf8; stroke-width: 2;"></i></div>
+                    <h2
+                        style="font-size: 28px; color: #f8fafc; margin: 0 0 8px 0; font-family: system-ui, -apple-system, sans-serif;">
+                        Let's Get to Know You</h2>
+                    <p style="color: #94a3b8; margin: 0; font-family: system-ui, -apple-system, sans-serif;">We need
+                        this for safety and emergency purposes</p>
                 </div>
-                
-                <div style="background: rgba(15, 23, 42, 0.8); border-radius: 16px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.1);">
-                    
+
+                <div
+                    style="background: rgba(15, 23, 42, 0.8); border-radius: 16px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.1);">
+
                     <div style="margin-bottom: 16px;">
-                        <label style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;"><i data-lucide="user" style="width: 14px; height: 14px; vertical-align: middle; stroke-width: 2;"></i> Full Name *</label>
-                        <input type="text" id="obFullName" placeholder="John Smith" style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+                        <label
+                            style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;"><i
+                                data-lucide="user"
+                                style="width: 14px; height: 14px; vertical-align: middle; stroke-width: 2;"></i> Full
+                            Name *</label>
+                        <input type="text" id="obFullName" placeholder="John Smith"
+                            style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
                     </div>
-                    
+
                     <div style="margin-bottom: 16px;">
-                        <label style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;"><i data-lucide="phone" style="width: 14px; height: 14px; vertical-align: middle; stroke-width: 2;"></i> Phone *</label>
-                        <input type="tel" id="obPhone" placeholder="+27 82 123 4567" style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+                        <label
+                            style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;"><i
+                                data-lucide="phone"
+                                style="width: 14px; height: 14px; vertical-align: middle; stroke-width: 2;"></i> Phone
+                            *</label>
+                        <input type="tel" id="obPhone" placeholder="+27 82 123 4567"
+                            style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
                     </div>
-                    
+
                     <div style="margin-bottom: 16px;">
-                        <label style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;"><i data-lucide="calendar" style="width: 14px; height: 14px; vertical-align: middle; stroke-width: 2;"></i> Date of Birth *</label>
-                        <input type="date" id="obDOB" style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+                        <label
+                            style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;"><i
+                                data-lucide="calendar"
+                                style="width: 14px; height: 14px; vertical-align: middle; stroke-width: 2;"></i> Date of
+                            Birth *</label>
+                        <input type="date" id="obDOB"
+                            style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
                     </div>
-                    
+
                     <div style="margin-bottom: 16px;">
-                        <label style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;"><i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle; stroke-width: 2;"></i> Address *</label>
-                        <input type="text" id="obAddress" placeholder="123 Beach Road" style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+                        <label
+                            style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;"><i
+                                data-lucide="map-pin"
+                                style="width: 14px; height: 14px; vertical-align: middle; stroke-width: 2;"></i> Address
+                            *</label>
+                        <input type="text" id="obAddress" placeholder="123 Beach Road"
+                            style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
                     </div>
-                    
+
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
                         <div>
-                            <label style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;">City *</label>
-                            <input type="text" id="obCity" placeholder="Cape Town" value="Cape Town" style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+                            <label
+                                style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;">City
+                                *</label>
+                            <input type="text" id="obCity" placeholder="Cape Town" value="Cape Town"
+                                style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
                         </div>
                         <div>
-                            <label style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;">Postal *</label>
-                            <input type="text" id="obPostal" placeholder="8001" style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+                            <label
+                                style="color: #94a3b8; font-size: 13px; margin-bottom: 4px; display: block; font-family: system-ui, -apple-system, sans-serif;">Postal
+                                *</label>
+                            <input type="text" id="obPostal" placeholder="8001"
+                                style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f8fafc; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box;">
                         </div>
                     </div>
-                    
+
                 </div>
-                
-                <button onclick="saveOnboardingPersonal()" style="width: 100%; padding: 16px; font-size: 16px; font-weight: 600; background: #38bdf8; color: white; border: none; border-radius: 8px; cursor: pointer; font-family: system-ui, -apple-system, sans-serif;">Continue to Dashboard</button>
-                
-                <div style="text-align: center; margin-top: 16px; color: #64748b; font-size: 12px; font-family: system-ui, -apple-system, sans-serif;">
+
+                <button onclick="saveOnboardingPersonal()"
+                    style="width: 100%; padding: 16px; font-size: 16px; font-weight: 600; background: #38bdf8; color: white; border: none; border-radius: 8px; cursor: pointer; font-family: system-ui, -apple-system, sans-serif;">Continue
+                    to Dashboard</button>
+
+                <div
+                    style="text-align: center; margin-top: 16px; color: #64748b; font-size: 12px; font-family: system-ui, -apple-system, sans-serif;">
                     * Required fields
                 </div>
             </div>
@@ -2611,9 +2785,12 @@
         <div class="container">
             <div class="header">
                 <div class="header-top">
-                    <div class="logo"><i data-lucide="waves" style="width: 24px; height: 24px; vertical-align: middle;"></i> SwimLoading</div>
+                    <div class="logo"><i data-lucide="waves"
+                            style="width: 24px; height: 24px; vertical-align: middle;"></i> SwimLoading</div>
                     <div style="display: flex; gap: 12px; align-items: center;">
-                        <button class="btn" style="padding: 8px 16px; font-size: 13px; background: transparent; border: 1px solid var(--danger); color: var(--danger);" onclick="signOut()">Logout</button>
+                        <button class="btn"
+                            style="padding: 8px 16px; font-size: 13px; background: transparent; border: 1px solid var(--danger); color: var(--danger);"
+                            onclick="signOut()">Logout</button>
                         <div class="user-avatar" onclick="showProfileSettings()" title="Profile Settings">👤</div>
                     </div>
                 </div>
@@ -2624,33 +2801,73 @@
                 <button class="nav-tab" onclick="showPage('logTemp')">Log Temp</button>
                 <button class="nav-tab" onclick="showPage('history')">History</button>
                 <button class="nav-tab" onclick="showPage('safety')">Safety</button>
-                <button class="nav-tab" onclick="showPage('events')">Events</button>
+                <button class="nav-tab" onclick="showPage('events')">Swims</button>
                 <button class="nav-tab" onclick="showPage('leaderboard')">Leaderboard</button>
             </div>
+
+            <style>
+                @media (max-width: 520px) {
+                    .nav-tabs {
+                        flex-wrap: wrap;
+                        overflow-x: visible;
+                        /* Disable scrolling */
+                        height: auto;
+                        gap: 8px;
+                        /* Slightly reduce gap */
+                        margin-bottom: 12px;
+                    }
+
+                    .nav-tab {
+                        flex: 1 1 30%;
+                        /* Force 3 items per row */
+                        padding: 8px 4px;
+                        font-size: 12px;
+                        white-space: normal;
+                        /* Allow text wrapping within button if needed */
+                        text-align: center;
+                        justify-content: center;
+                        min-width: unset;
+                        /* Remove min-width if existent */
+                    }
+                }
+            </style>
 
             <!-- DASHBOARD -->
             <div id="dashboard" class="page active">
                 <div class="card">
                     <div class="card-title">Dashboard</div>
-                    
+
                     <!-- Your Upcoming Swims -->
                     <div style="margin-bottom: 24px;">
-                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 16px;"><i data-lucide="calendar-check" style="width: 18px; height: 18px; vertical-align: middle;"></i> Your Upcoming Swims</div>
+                        <div
+                            style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 16px;">
+                            <i data-lucide="calendar-check"
+                                style="width: 18px; height: 18px; vertical-align: middle;"></i> Your Upcoming Swims
+                        </div>
                         <div id="dashUpcomingSwims">Loading...</div>
                     </div>
-                    
+
                     <!-- Your Stats -->
-                    <div style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
-                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 16px;"><i data-lucide="bar-chart-3" style="width: 18px; height: 18px; vertical-align: middle;"></i> Your Stats</div>
+                    <div
+                        style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+                        <div
+                            style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 16px;">
+                            <i data-lucide="bar-chart-3" style="width: 18px; height: 18px; vertical-align: middle;"></i>
+                            Your Stats
+                        </div>
                         <div id="dashStats">Loading...</div>
                     </div>
-                    
+
                     <!-- Recent Conditions -->
                     <div style="margin-bottom: 24px;">
-                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 16px;"><i data-lucide="thermometer" style="width: 18px; height: 18px; vertical-align: middle;"></i> Latest Water Temps</div>
+                        <div
+                            style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 16px;">
+                            <i data-lucide="thermometer" style="width: 18px; height: 18px; vertical-align: middle;"></i>
+                            Latest Water Temps
+                        </div>
                         <div id="dashConditions">Loading...</div>
                     </div>
-                    
+
                     <!-- Quick Actions -->
                     <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
                         <button class="btn btn-success" onclick="showPage('logTemp')">Log Temperature</button>
@@ -2662,24 +2879,29 @@
             <div id="logTemp" class="page">
                 <div class="card">
                     <div class="card-title">Log Temperature</div>
-                    
+
                     <div class="form-group">
-                        <div class="form-label"><i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle;"></i> Location</div>
+                        <div class="form-label"><i data-lucide="map-pin"
+                                style="width: 14px; height: 14px; vertical-align: middle;"></i> Location</div>
                         <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                             <select data-spots style="flex: 1;">
                                 <option>Loading spots...</option>
                             </select>
-                            <button type="button" id="gpsButton" class="btn" style="width: auto; padding: 12px 16px; font-size: 13px;" onclick="getCurrentLocation()">
+                            <button type="button" id="gpsButton" class="btn"
+                                style="width: auto; padding: 12px 16px; font-size: 13px;"
+                                onclick="getCurrentLocation()">
                                 <i data-lucide="navigation" style="width: 14px; height: 14px;"></i> GPS
                             </button>
                         </div>
-                        <div id="gpsStatus" style="font-size: 12px; color: var(--text-secondary); min-height: 18px;"></div>
+                        <div id="gpsStatus" style="font-size: 12px; color: var(--text-secondary); min-height: 18px;">
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <div class="form-label">🌡️ Water Temperature</div>
                         <div class="slider-value" id="tempValue">14°C</div>
-                        <input type="range" id="tempSlider" min="8" max="25" value="14" step="0.5" oninput="document.getElementById('tempValue').textContent = this.value + '°C'">
+                        <input type="range" id="tempSlider" min="8" max="25" value="14" step="0.5"
+                            oninput="document.getElementById('tempValue').textContent = this.value + '°C'">
                         <div class="slider-labels">
                             <span>8°C</span>
                             <span>25°C</span>
@@ -2723,16 +2945,18 @@
             <div id="history" class="page">
                 <div class="card">
                     <div class="card-title">Temperature History & Trends</div>
-                    
+
                     <div class="form-group">
-                        <div class="form-label"><i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle;"></i> Filter by Location</div>
+                        <div class="form-label"><i data-lucide="map-pin"
+                                style="width: 14px; height: 14px; vertical-align: middle;"></i> Filter by Location</div>
                         <select id="historySpotFilter" onchange="loadHistory()">
                             <option value="">All Locations</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <div class="form-label"><i data-lucide="users" style="width: 14px; height: 14px; vertical-align: middle;"></i> Show</div>
+                        <div class="form-label"><i data-lucide="users"
+                                style="width: 14px; height: 14px; vertical-align: middle;"></i> Show</div>
                         <div class="toggle-group">
                             <div class="toggle-btn active" onclick="toggleHistoryView(this, 'my')">My Logs</div>
                             <div class="toggle-btn" onclick="toggleHistoryView(this, 'community')">Community</div>
@@ -2756,16 +2980,18 @@
             <!-- SWIM EVENTS -->
             <div id="events" class="page">
                 <div class="card">
-                    <div class="card-title">Group Swims & Events</div>
-                    
+                    <div class="card-title">Group Swims</div>
+
                     <!-- Create Event Button -->
                     <button class="btn btn-success" onclick="showCreateEvent()" style="margin-bottom: 20px;">
-                        <i data-lucide="plus" style="width: 16px; height: 16px; vertical-align: middle;"></i> Create Swim Event
+                        <i data-lucide="plus" style="width: 16px; height: 16px; vertical-align: middle;"></i> Create
+                        New Swim
                     </button>
 
                     <!-- Event Filters -->
                     <div class="form-group">
-                        <div class="form-label"><i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle;"></i> Location</div>
+                        <div class="form-label"><i data-lucide="map-pin"
+                                style="width: 14px; height: 14px; vertical-align: middle;"></i> Location</div>
                         <select id="eventSpotFilter" onchange="loadEvents()">
                             <option value="">All Locations</option>
                         </select>
@@ -2791,18 +3017,25 @@
                 </div>
 
                 <!-- Create Event Modal -->
-                <div id="createEventModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; padding: 20px; overflow-y: auto;">
-                    <div style="max-width: 500px; margin: 40px auto; background: var(--bg-dark); border: 2px solid var(--border); border-radius: 20px; padding: 30px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h3 style="color: var(--text-primary); font-size: 20px;">Create Swim Event</h3>
-                            <button onclick="hideCreateEvent()" style="background: transparent; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer; padding: 0; width: auto;">✕</button>
+                <div id="createEventModal"
+                    style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; padding: 20px; overflow-y: auto;">
+                    <div
+                        style="max-width: 500px; margin: 40px auto; background: var(--bg-dark); border: 2px solid var(--border); border-radius: 20px; padding: 30px;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="color: var(--text-primary); font-size: 20px;">Create New Swim</h3>
+                            <button onclick="hideCreateEvent()"
+                                style="background: transparent; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer; padding: 0; width: auto;">✕</button>
                         </div>
 
                         <!-- Safety Disclaimer -->
-                        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-                            <div style="font-weight: 600; color: var(--danger); margin-bottom: 8px;">⚠️ Important Safety Notice</div>
+                        <div
+                            style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                            <div style="font-weight: 600; color: var(--danger); margin-bottom: 8px;">⚠️ Important Safety
+                                Notice</div>
                             <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
-                                Open water swimming is inherently dangerous. By creating or joining a swim event, you acknowledge that:
+                                Open water swimming is inherently dangerous. By creating or joining a swim, you
+                                acknowledge that:
                                 <ul style="margin: 8px 0 0 20px; padding: 0;">
                                     <li>You are responsible for your own safety</li>
                                     <li>Other swimmers are NOT responsible for you</li>
@@ -2814,17 +3047,20 @@
 
                         <form id="createEventForm" onsubmit="submitEvent(event)">
                             <div class="form-group">
-                                <div class="form-label">Event Name</div>
+                                <div class="form-label">Swim Name</div>
                                 <input type="text" id="eventName" placeholder="e.g., Morning Clifton Lap" required>
                             </div>
 
                             <div class="form-group">
-                                <div class="form-label"><i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle;"></i> Location</div>
+                                <div class="form-label"><i data-lucide="map-pin"
+                                        style="width: 14px; height: 14px; vertical-align: middle;"></i> Location</div>
                                 <select id="eventSpot" data-spots required></select>
                             </div>
 
                             <div class="form-group">
-                                <div class="form-label"><i data-lucide="calendar" style="width: 14px; height: 14px; vertical-align: middle;"></i> Date & Time</div>
+                                <div class="form-label"><i data-lucide="calendar"
+                                        style="width: 14px; height: 14px; vertical-align: middle;"></i> Date & Time
+                                </div>
                                 <input type="datetime-local" id="eventDateTime" required>
                             </div>
 
@@ -2833,24 +3069,32 @@
                                 <select id="eventPaceLevel" required>
                                     <option value="elite">🔥 Elite (&lt;1:45/100m) - Experienced only</option>
                                     <option value="advanced">💪 Advanced (1:45-2:15/100m) - Strong swimmers</option>
-                                    <option value="intermediate" selected>🌊 Intermediate (2:15-2:45/100m) - Comfortable in open water</option>
+                                    <option value="intermediate" selected>🌊 Intermediate (2:15-2:45/100m) - Comfortable
+                                        in open water</option>
                                     <option value="beginner">🏊 Beginner (&gt;2:45/100m) - New to open water</option>
                                 </select>
                             </div>
 
                             <div class="form-group">
-                                <div class="form-label"><i data-lucide="ruler" style="width: 14px; height: 14px; vertical-align: middle;"></i> Distance (km)</div>
+                                <div class="form-label"><i data-lucide="ruler"
+                                        style="width: 14px; height: 14px; vertical-align: middle;"></i> Distance (km)
+                                </div>
                                 <input type="number" id="eventDistance" step="0.1" placeholder="e.g., 2.5" required>
                             </div>
 
                             <div class="form-group">
-                                <div class="form-label"><i data-lucide="users" style="width: 14px; height: 14px; vertical-align: middle;"></i> Max Participants</div>
-                                <input type="number" id="eventMaxParticipants" placeholder="Leave empty for unlimited" min="2">
+                                <div class="form-label"><i data-lucide="users"
+                                        style="width: 14px; height: 14px; vertical-align: middle;"></i> Max Participants
+                                </div>
+                                <input type="number" id="eventMaxParticipants" placeholder="Leave empty for unlimited"
+                                    min="2">
                             </div>
 
                             <div class="form-group">
                                 <div class="form-label">📝 Description / Route</div>
-                                <textarea id="eventDescription" placeholder="Describe the route, meeting point, any special notes..." rows="4"></textarea>
+                                <textarea id="eventDescription"
+                                    placeholder="Describe the route, meeting point, any special notes..."
+                                    rows="4"></textarea>
                             </div>
 
                             <div class="form-group">
@@ -2862,68 +3106,83 @@
                                 </label>
                             </div>
 
-                            <button type="submit" class="btn btn-success" style="margin-top: 10px;">Create Event</button>
+                            <button type="submit" class="btn btn-success" style="margin-top: 10px;">Create
+                                Swim</button>
                         </form>
                     </div>
                 </div>
 
                 <!-- Event Details Modal -->
-                <div id="eventDetailsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1001; padding: 20px; overflow-y: auto;">
-                    <div style="max-width: 600px; margin: 40px auto; background: var(--bg-dark); border: 2px solid var(--border); border-radius: 20px; padding: 30px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h3 style="color: var(--text-primary); font-size: 20px;">Event Details</h3>
-                            <button onclick="hideEventDetails()" style="background: transparent; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer; padding: 0; width: auto;">✕</button>
+                <div id="eventDetailsModal"
+                    style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1001; padding: 20px; overflow-y: auto;">
+                    <div
+                        style="max-width: 600px; margin: 40px auto; background: var(--bg-dark); border: 2px solid var(--border); border-radius: 20px; padding: 30px;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="color: var(--text-primary); font-size: 20px;">Swim Details</h3>
+                            <button onclick="hideEventDetails()"
+                                style="background: transparent; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer; padding: 0; width: auto;">✕</button>
                         </div>
-                        
+
                         <div id="eventDetailsContent"></div>
                     </div>
                 </div>
 
                 <!-- Profile Settings Modal -->
-                <div id="profileModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1002; padding: 20px; overflow-y: auto;">
-                    <div style="max-width: 500px; margin: 40px auto; background: var(--bg-dark); border: 2px solid var(--border); border-radius: 20px; padding: 30px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div id="profileModal"
+                    style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1002; padding: 20px; overflow-y: auto;">
+                    <div
+                        style="max-width: 500px; margin: 40px auto; background: var(--bg-dark); border: 2px solid var(--border); border-radius: 20px; padding: 30px;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                             <h3 style="color: var(--text-primary); font-size: 20px;">Profile Settings</h3>
-                            <button onclick="hideProfileSettings()" style="background: transparent; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer; padding: 0; width: auto;">✕</button>
+                            <button onclick="hideProfileSettings()"
+                                style="background: transparent; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer; padding: 0; width: auto;">✕</button>
                         </div>
-                        
+
                         <div style="text-align: center; margin-bottom: 24px;">
-                            <div style="width: 80px; height: 80px; border-radius: 50%; background: var(--ocean-blue); display: inline-flex; align-items: center; justify-content: center; font-size: 36px; margin-bottom: 12px;">
+                            <div
+                                style="width: 80px; height: 80px; border-radius: 50%; background: var(--ocean-blue); display: inline-flex; align-items: center; justify-content: center; font-size: 36px; margin-bottom: 12px;">
                                 👤
                             </div>
                             <div style="color: var(--text-primary); font-weight: 600;" id="profileEmail"></div>
                         </div>
-                        
+
                         <div class="form-group">
                             <div class="form-label">Display Name</div>
                             <input type="text" id="profileDisplayName" placeholder="Your name">
                         </div>
-                        
+
                         <div class="form-group">
                             <div class="form-label">🏖️ Home Beach</div>
                             <select id="profileHomeBeach" data-spots></select>
                         </div>
-                        
+
                         <div class="form-group">
                             <div class="form-label">🏊 Pool 1km Time (optional)</div>
                             <input type="text" id="profilePoolTime" placeholder="e.g., 18:30 (mm:ss)">
-                            <small style="color: var(--text-secondary); font-size: 11px;">Helps match you with appropriate pace groups</small>
+                            <small style="color: var(--text-secondary); font-size: 11px;">Helps match you with
+                                appropriate pace groups</small>
                         </div>
-                        
+
                         <div class="form-group">
                             <div class="form-label">🌊 Ocean 1km Time (optional)</div>
                             <input type="text" id="profileOceanTime" placeholder="e.g., 21:00 (mm:ss)">
                         </div>
-                        
+
                         <div class="form-group">
                             <div class="form-label">❄️ Cold Tolerance (°C)</div>
                             <input type="number" id="profileColdTolerance" placeholder="e.g., 12" step="0.5">
-                            <small style="color: var(--text-secondary); font-size: 11px;">Minimum water temp you're comfortable swimming in</small>
+                            <small style="color: var(--text-secondary); font-size: 11px;">Minimum water temp you're
+                                comfortable swimming in</small>
                         </div>
-                        
-                        <button class="btn btn-success" onclick="saveProfile()" style="margin-bottom: 12px;">Save Profile</button>
-                        
-                        <button class="btn" style="background: transparent; border: 2px solid var(--danger); color: var(--danger);" onclick="signOut()">Sign Out</button>
+
+                        <button class="btn btn-success" onclick="saveProfile()" style="margin-bottom: 12px;">Save
+                            Profile</button>
+
+                        <button class="btn"
+                            style="background: transparent; border: 2px solid var(--danger); color: var(--danger);"
+                            onclick="signOut()">Sign Out</button>
                     </div>
                 </div>
             </div>
@@ -2931,44 +3190,62 @@
             <!-- SAFETY -->
             <div id="safety" class="page">
                 <div class="card">
-                    <div class="card-title"><i data-lucide="shield-alert" style="width: 24px; height: 24px; vertical-align: middle;"></i> Safety</div>
-                    
+                    <div class="card-title"><i data-lucide="shield-alert"
+                            style="width: 24px; height: 24px; vertical-align: middle;"></i> Safety</div>
+
                     <!-- Marine Life -->
-                    <div style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-                        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 16px; font-size: 18px;">🦈 Marine Life</div>
+                    <div
+                        style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                        <div
+                            style="font-weight: 700; color: var(--text-primary); margin-bottom: 16px; font-size: 18px;">
+                            🦈 Marine Life</div>
                         <div style="color: var(--text-secondary); line-height: 1.7; font-size: 14px;">
                             <ul style="margin: 0 0 0 20px; padding: 0;">
-                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Sharks</strong> – Avoid dawn/dusk, murky water, and swimming near seals</li>
-                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Seals</strong> – Curious but can bite if cornered; give them space</li>
-                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Rabid seals</strong> – Rare but occurs; avoid any seal acting aggressively or unusually</li>
-                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Jellyfish & Bluebottles</strong> – Check conditions; exit if you see large numbers</li>
+                                <li style="margin-bottom: 8px;"><strong
+                                        style="color: var(--text-primary);">Sharks</strong> – Avoid dawn/dusk, murky
+                                    water, and swimming near seals</li>
+                                <li style="margin-bottom: 8px;"><strong
+                                        style="color: var(--text-primary);">Seals</strong> – Curious but can bite if
+                                    cornered; give them space</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Rabid
+                                        seals</strong> – Rare but occurs; avoid any seal acting aggressively or
+                                    unusually</li>
+                                <li style="margin-bottom: 8px;"><strong style="color: var(--text-primary);">Jellyfish &
+                                        Bluebottles</strong> – Check conditions; exit if you see large numbers</li>
                             </ul>
                         </div>
                     </div>
-                    
+
                     <!-- Emergency Numbers -->
-                    <div style="background: rgba(239, 68, 68, 0.1); border: 2px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-                        <div style="font-weight: 700; color: var(--danger); margin-bottom: 16px; font-size: 18px;">🚨 Emergency</div>
+                    <div
+                        style="background: rgba(239, 68, 68, 0.1); border: 2px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                        <div style="font-weight: 700; color: var(--danger); margin-bottom: 16px; font-size: 18px;">🚨
+                            Emergency</div>
                         <div style="display: grid; gap: 12px;">
-                            <a href="tel:0870949774" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
+                            <a href="tel:0870949774"
+                                style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
                                 <span style="color: var(--text-primary); font-weight: 600;">🚤 NSRI (Sea Rescue)</span>
                                 <span style="color: #38bdf8; font-weight: 700;">087 094 9774</span>
                             </a>
-                            <a href="tel:10111" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
+                            <a href="tel:10111"
+                                style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
                                 <span style="color: var(--text-primary); font-weight: 600;">👮 Police</span>
                                 <span style="color: #38bdf8; font-weight: 700;">10111</span>
                             </a>
-                            <a href="tel:10177" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
+                            <a href="tel:10177"
+                                style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; text-decoration: none;">
                                 <span style="color: var(--text-primary); font-weight: 600;">🚑 Ambulance</span>
                                 <span style="color: #38bdf8; font-weight: 700;">10177</span>
                             </a>
                         </div>
                     </div>
-                    
+
                     <!-- Share Location Note -->
-                    <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 16px;">
+                    <div
+                        style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 16px;">
                         <div style="color: var(--text-secondary); font-size: 13px; line-height: 1.6;">
-                            <strong style="color: var(--ocean-light);">💡 Tip:</strong> Share your live location with a buddy via WhatsApp before you swim.
+                            <strong style="color: var(--ocean-light);">💡 Tip:</strong> Share your live location with a
+                            buddy via WhatsApp before you swim.
                         </div>
                     </div>
                 </div>
@@ -2977,13 +3254,18 @@
             <!-- LEADERBOARD -->
             <div id="leaderboard" class="page">
                 <div class="card">
-                    <div class="card-title"><i data-lucide="trophy" style="width: 24px; height: 24px; vertical-align: middle;"></i> Leaderboard</div>
-                    
+                    <div class="card-title"><i data-lucide="trophy"
+                            style="width: 24px; height: 24px; vertical-align: middle;"></i> Leaderboard</div>
+
                     <!-- Top Swimmers -->
                     <div>
-                        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 16px; font-size: 18px;">🏆 Top Swimmers</div>
-                        <div id="leaderboardList" style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 16px;">
-                            <div style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading...</div>
+                        <div
+                            style="font-weight: 700; color: var(--text-primary); margin-bottom: 16px; font-size: 18px;">
+                            🏆 Top Swimmers</div>
+                        <div id="leaderboardList"
+                            style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 16px;">
+                            <div style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading...
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2995,7 +3277,7 @@
         function showAuthTab(tab) {
             document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-            
+
             event.target.classList.add('active');
             document.getElementById(tab + 'Form').classList.add('active');
         }
@@ -3003,10 +3285,10 @@
         function showPage(page) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-            
+
             document.getElementById(page).classList.add('active');
             event.target.classList.add('active');
-            
+
             // Load data for specific pages
             if (page === 'dashboard') {
                 loadDashboard();
@@ -3017,15 +3299,15 @@
             } else if (page === 'leaderboard') {
                 loadLeaderboard();
             }
-            
+
             // Initialize icons after page switch
             initIcons();
         }
-        
+
         // Load leaderboard data
         async function loadLeaderboard() {
             const listEl = document.getElementById('leaderboardList');
-            
+
             try {
                 // Fetch top swimmers by points
                 const { data, error } = await supabaseClient
@@ -3034,7 +3316,7 @@
                     .gt('points', 0)
                     .order('points', { ascending: false })
                     .limit(10);
-                
+
                 if (error) {
                     console.error('Leaderboard error:', error);
                     listEl.innerHTML = `<div style="text-align: center; color: var(--danger); padding: 20px;">
@@ -3046,13 +3328,13 @@
                 } else {
                     listEl.innerHTML = renderLeaderboardList(data, 'points');
                 }
-                
+
             } catch (err) {
                 console.error('Leaderboard error:', err);
                 listEl.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 20px;">Error loading leaderboard</div>';
             }
         }
-        
+
         function renderLeaderboardList(data, pointsField) {
             const medals = ['🥇', '🥈', '🥉'];
             return data.map((row, i) => {
@@ -3060,7 +3342,7 @@
                 const points = row[pointsField] || 0;
                 const medal = medals[i] || `${i + 1}.`;
                 const isTop3 = i < 3;
-                
+
                 return `<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; ${isTop3 ? 'background: rgba(56, 189, 248, 0.1);' : ''} border-radius: 8px; margin-bottom: 8px;">
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <span style="font-size: ${isTop3 ? '20px' : '14px'}; width: 30px; text-align: center;">${medal}</span>
@@ -3077,4 +3359,5 @@
         }
     </script>
 </body>
+
 </html>
