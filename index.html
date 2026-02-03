@@ -96,6 +96,9 @@
 
             // Initialize spot lock handler
             attachSpotLockHandler();
+
+            // Initialize nav scroll handler
+            initNavScroll();
         }
 
         // Sign up
@@ -161,7 +164,9 @@
                 .from('spots')
                 .select('*')
                 .eq('active', true)
-                .order('name');
+                .order('name', { ascending: true });
+
+
 
             if (data) {
                 spots = data;
@@ -207,6 +212,70 @@
             // console.log('Spot selection locked by user');
         }
 
+        // Nav Scroll Handler
+        function initNavScroll() {
+            const navTabs = document.querySelector('.nav-tabs');
+            const navFade = document.querySelector('.nav-fade');
+
+            if (!navTabs || !navFade) return;
+
+            const checkScroll = () => {
+                // If scrolled to end (within 5px tolerance), hide fade
+                const isAtEnd = navTabs.scrollWidth - navTabs.scrollLeft - navTabs.clientWidth < 5;
+                navFade.style.opacity = isAtEnd ? '0' : '1';
+            };
+
+            navTabs.removeEventListener('scroll', checkScroll);
+            navTabs.addEventListener('scroll', checkScroll);
+
+            // Checks initially
+            checkScroll();
+
+            // Also check on resize
+            window.addEventListener('resize', checkScroll);
+        }
+
+        // Age calculation helper for temps
+        function getAgeDisplay(timestamp) {
+            const now = new Date();
+            const then = new Date(timestamp);
+            const diffMs = now - then;
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+            if (diffHours < 24) {
+                return `${diffHours}h`;
+            } else {
+                const diffDays = Math.floor(diffHours / 24);
+                return `${diffDays}d`;
+            }
+        }
+
+        // Check if temp is fresh (<=96h)
+        function isTempFresh(timestamp) {
+            const now = new Date();
+            const then = new Date(timestamp);
+            const diffMs = now - then;
+            const diffHours = diffMs / (1000 * 60 * 60);
+            return diffHours <= 96;
+        }
+
+        // Helper to parse route from notes
+        function parseRouteFromNotes(notes) {
+            if (!notes || !notes.startsWith('Route: ')) return { route: null, notes: notes };
+            const pipeIndex = notes.indexOf(' | ');
+            if (pipeIndex !== -1) {
+                return {
+                    route: notes.substring(7, pipeIndex).trim(),
+                    notes: notes.substring(pipeIndex + 3).trim()
+                };
+            } else {
+                return {
+                    route: notes.substring(7).trim(),
+                    notes: ''
+                };
+            }
+        }
+
         // Load dashboard
         async function loadDashboard() {
             try {
@@ -229,7 +298,7 @@
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Points</div>
                         </div>
                         <div style="text-align: center;">
-                            <div style="font-size: 24px; font-weight: 700; color: var(--warning);">${stats?.current_streak || 0}🔥</div>
+                            <div style="font-size: 24px; font-weight: 700; color: var(--warning);">${stats?.current_streak || 0} <i data-lucide="zap" style="width: 18px; height: 18px; vertical-align: middle;"></i></div>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Day Streak</div>
                         </div>
                     </div>
@@ -269,12 +338,20 @@
                     document.getElementById('dashUpcomingSwims').innerHTML = upcomingSwims.map(e => {
                         const d = new Date(e.start_at);
                         const isToday = d.toDateString() === new Date().toDateString();
+                        const routeInfo = parseRouteFromNotes(e.notes);
                         return `
                             <div style="background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 12px; margin-bottom: 8px; cursor: pointer;" onclick="viewEventDetails('${e.id}')">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div>
                                         <div style="font-weight: 600; color: var(--text-primary); font-size: 15px;">${e.title}</div>
-                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;"><i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle;"></i> ${e.location_name}</div>
+                                        <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">
+                                            <div style="font-size: 12px; color: var(--text-secondary);"><i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle;"></i> ${e.location_name}</div>
+                                            ${routeInfo.route ? `
+                                                <div style="background: rgba(56, 189, 248, 0.15); color: var(--ocean-light); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.2);">
+                                                    ${routeInfo.route}
+                                                </div>
+                                            ` : ''}
+                                        </div>
                                     </div>
                                     <div style="text-align: right;">
                                         <div style="font-size: 13px; color: ${isToday ? 'var(--success)' : 'var(--ocean-light)'}; font-weight: 600;">
@@ -319,9 +396,11 @@
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
                             ${latest.map(log => {
                         const color = log.temp_c < 12 ? '#3b82f6' : log.temp_c < 16 ? '#06b6d4' : log.temp_c < 20 ? '#10b981' : '#f59e0b';
+                        const age = getAgeDisplay(log.created_at);
+                        const isFresh = isTempFresh(log.created_at);
                         return `
-                                    <div style="background: rgba(15, 23, 42, 0.6); border-radius: 10px; padding: 12px; text-align: center;">
-                                        <div style="font-size: 24px; font-weight: 700; color: ${color};">${log.temp_c}°</div>
+                                    <div style="background: rgba(15, 23, 42, 0.6); border-radius: 10px; padding: 12px; text-align: center; ${!isFresh ? 'opacity: 0.6;' : ''}">
+                                        <div style="font-size: 24px; font-weight: 700; color: ${color};">${log.temp_c}° <span style="font-size: 11px; font-weight: 400; color: var(--text-secondary);">${age}</span></div>
                                         <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${log.spots?.name || 'Unknown'}</div>
                                         <div style="font-size: 10px; color: var(--text-secondary); opacity: 0.7;">${getTimeAgo(new Date(log.created_at))}</div>
                                     </div>
@@ -447,18 +526,37 @@
                 return;
             }
 
-            const html = logs.map(log => {
-                const date = new Date(log.created_at);
-                const timeAgo = getTimeAgo(date);
-                const spotName = log.spots?.name || 'Unknown';
-                const userName = log.profiles?.display_name || 'Anonymous';
+            // Group by spot to get latest per spot
+            const bySpot = {};
+            logs.forEach(log => {
+                if (!bySpot[log.spot_id]) {
+                    bySpot[log.spot_id] = log;
+                }
+            });
 
-                return `
+            const allSpots = Object.values(bySpot);
+
+            // Separate fresh (<=96h) and stale (>96h)
+            const freshTemps = allSpots.filter(log => isTempFresh(log.created_at));
+            const staleTemps = allSpots.filter(log => !isTempFresh(log.created_at));
+
+            let html = '';
+
+            // Fresh temps section
+            if (freshTemps.length > 0) {
+                html += freshTemps.map(log => {
+                    const date = new Date(log.created_at);
+                    const timeAgo = getTimeAgo(date);
+                    const age = getAgeDisplay(log.created_at);
+                    const spotName = log.spots?.name || 'Unknown';
+                    const userName = log.profiles?.display_name || 'Anonymous';
+
+                    return `
                     <div style="background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                             <div>
                                 <div style="font-size: 18px; font-weight: 600; color: var(--ocean-light);">
-                                    ${log.temp_c}°C
+                                    ${log.temp_c}°C <span style="font-size: 12px; font-weight: 400; color: var(--text-secondary);">${age}</span>
                                 </div>
                                 <div style="font-size: 13px; color: var(--text-secondary);">
                                     <i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle;"></i> ${spotName}
@@ -469,18 +567,18 @@
                                     ${timeAgo}
                                 </div>
                                 <div style="font-size: 12px; color: var(--text-secondary);">
-                                    👤 ${userName}
+                                    ${userName}
                                 </div>
                             </div>
                         </div>
                         ${log.conditions ? `
                             <div style="display: inline-block; background: rgba(56, 189, 248, 0.2); padding: 4px 10px; border-radius: 6px; font-size: 11px; margin-right: 6px; margin-top: 6px;">
-                                🌊 ${log.conditions}
+                                ${log.conditions}
                             </div>
                         ` : ''}
                         ${log.hazards && log.hazards.length > 0 ? log.hazards.map(h => `
                             <div style="display: inline-block; background: rgba(245, 158, 11, 0.2); padding: 4px 10px; border-radius: 6px; font-size: 11px; margin-right: 6px; margin-top: 6px;">
-                                ⚠️ ${h}
+                                ${h}
                             </div>
                         `).join('') : ''}
                         ${log.notes ? `
@@ -490,9 +588,86 @@
                         ` : ''}
                     </div>
                 `;
-            }).join('');
+                }).join('');
+            }
+
+            // Stale temps section (collapsible)
+            if (staleTemps.length > 0) {
+                html += `
+                    <div style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
+                        <div onclick="toggleStaleTemps()" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(15, 23, 42, 0.4); border-radius: 8px; margin-bottom: 12px;">
+                            <div style="font-size: 14px; font-weight: 600; color: var(--text-secondary);">
+                                <i data-lucide="clock" style="width: 14px; height: 14px; vertical-align: middle;"></i> Stale Temperatures (${staleTemps.length})
+                            </div>
+                            <i id="staleToggleIcon" data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                        </div>
+                        <div id="staleTempsContainer" style="display: none;">
+                            ${staleTemps.map(log => {
+                    const date = new Date(log.created_at);
+                    const timeAgo = getTimeAgo(date);
+                    const age = getAgeDisplay(log.created_at);
+                    const spotName = log.spots?.name || 'Unknown';
+                    const userName = log.profiles?.display_name || 'Anonymous';
+
+                    return `
+                                    <div style="background: rgba(15, 23, 42, 0.4); border: 2px solid rgba(56, 189, 248, 0.1); border-radius: 12px; padding: 16px; margin-bottom: 12px; opacity: 0.6;">
+                                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                            <div>
+                                                <div style="font-size: 18px; font-weight: 600; color: var(--ocean-light);">
+                                                    ${log.temp_c}°C <span style="font-size: 12px; font-weight: 400; color: var(--text-secondary);">${age}</span>
+                                                </div>
+                                                <div style="font-size: 13px; color: var(--text-secondary);">
+                                                    <i data-lucide="map-pin" style="width: 14px; height: 14px; vertical-align: middle;"></i> ${spotName}
+                                                </div>
+                                            </div>
+                                            <div style="text-align: right;">
+                                                <div style="font-size: 12px; color: var(--text-secondary);">
+                                                    ${timeAgo}
+                                                </div>
+                                                <div style="font-size: 12px; color: var(--text-secondary);">
+                                                    ${userName}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        ${log.conditions ? `
+                                            <div style="display: inline-block; background: rgba(56, 189, 248, 0.1); padding: 4px 10px; border-radius: 6px; font-size: 11px; margin-right: 6px; margin-top: 6px;">
+                                                ${log.conditions}
+                                            </div>
+                                        ` : ''}
+                                        ${log.hazards && log.hazards.length > 0 ? log.hazards.map(h => `
+                                            <div style="display: inline-block; background: rgba(245, 158, 11, 0.1); padding: 4px 10px; border-radius: 6px; font-size: 11px; margin-right: 6px; margin-top: 6px;">
+                                                ${h}
+                                            </div>
+                                        `).join('') : ''}
+                                        ${log.notes ? `
+                                            <div style="margin-top: 10px; font-size: 13px; color: var(--text-secondary); font-style: italic;">
+                                                "${log.notes}"
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `;
+                }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
 
             container.innerHTML = html;
+            initIcons();
+        }
+
+        // Toggle stale temps visibility
+        function toggleStaleTemps() {
+            const container = document.getElementById('staleTempsContainer');
+            const icon = document.getElementById('staleToggleIcon');
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                icon.setAttribute('data-lucide', 'chevron-up');
+            } else {
+                container.style.display = 'none';
+                icon.setAttribute('data-lucide', 'chevron-down');
+            }
+            initIcons();
         }
 
         // Render temperature chart
@@ -623,7 +798,14 @@
 
                 // Filter out past events
                 const now = new Date();
-                const upcomingEvents = events?.filter(e => new Date(e.start_at) >= now) || [];
+                let upcomingEvents = events?.filter(e => new Date(e.start_at) >= now) || [];
+
+                // Apply pace filter if selected
+                const paceFilter = document.getElementById('eventPaceFilter')?.value;
+                if (paceFilter) {
+                    const targetPace = parseInt(paceFilter, 10);
+                    upcomingEvents = upcomingEvents.filter(e => e.target_pace_sec_per_100m === targetPace);
+                }
 
                 console.log('Upcoming events:', upcomingEvents);
 
@@ -679,7 +861,7 @@
                         rsvpButtons = `
                             <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
                                 <button class="btn btn-success" style="flex: 1; padding: 10px; font-size: 13px;" disabled>
-                                    ✓ You're Going
+                                    <i data-lucide="check" style="width: 14px; height: 14px; vertical-align: middle;"></i> You're Going
                                 </button>
                                 <button class="btn" style="padding: 10px 16px; font-size: 13px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3);" onclick="event.stopPropagation(); leaveEvent('${event.id}')">
                                     Cancel
@@ -690,7 +872,7 @@
                             </div>
                             <div style="margin-top: 8px;">
                                 <button class="btn" style="width: 100%; padding: 8px; font-size: 12px; background: rgba(234, 179, 8, 0.2); border: 1px solid rgba(234, 179, 8, 0.4); color: var(--warning);" onclick="event.stopPropagation(); showRunningLate('${event.id}')">
-                                    ⏰ Running Late / Traffic
+                                    <i data-lucide="clock" style="width: 14px; height: 14px; vertical-align: middle;"></i> Running Late / Traffic
                                 </button>
                             </div>
                         `;
@@ -725,8 +907,10 @@
                         `;
                     }
 
+                    const routeInfo = parseRouteFromNotes(event.notes);
+
                     return `
-                        <div style="background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 18px; margin-bottom: 14px;">
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 18px; margin-bottom: 14px; cursor: pointer;" onclick="viewEventDetails('${event.id}')">
                             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
                                 <div style="flex: 1;">
                                     <div style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
@@ -752,6 +936,11 @@
                                         ${event.category}
                                     </div>
                                 ` : ''}
+                                ${routeInfo.route ? `
+                                    <div style="background: rgba(56, 189, 248, 0.3); border: 1px solid var(--ocean-light); padding: 6px 12px; border-radius: 6px; font-size: 12px; color: white;">
+                                        <i data-lucide="repeat" style="width: 14px; height: 14px; vertical-align: middle;"></i> ${routeInfo.route}
+                                    </div>
+                                ` : ''}
                                 ${event.distance_km ? `
                                     <div style="background: rgba(16, 185, 129, 0.2); padding: 6px 12px; border-radius: 6px; font-size: 12px;">
                                         <i data-lucide="ruler" style="width: 14px; height: 14px; vertical-align: middle;"></i> ${event.distance_km}km
@@ -759,14 +948,22 @@
                                 ` : ''}
                                 ${event.suit ? `
                                     <div style="background: rgba(139, 92, 246, 0.2); padding: 6px 12px; border-radius: 6px; font-size: 12px;">
-                                        👕 ${event.suit}
+                                        <i data-lucide="waves" style="width: 14px; height: 14px; vertical-align: middle;"></i> ${event.suit}
+                                    </div>
+                                ` : ''}
+                                ${event.target_pace_sec_per_100m ? `
+                                    <div style="background: rgba(251, 191, 36, 0.2); padding: 6px 12px; border-radius: 6px; font-size: 12px;">
+                                        ${event.target_pace_sec_per_100m === 100 ? '<i data-lucide="zap" style="width: 14px; height: 14px; vertical-align: middle;"></i> Fast' :
+                                event.target_pace_sec_per_100m === 120 ? '<i data-lucide="trending-up" style="width: 14px; height: 14px; vertical-align: middle;"></i> Steady' :
+                                    event.target_pace_sec_per_100m === 150 ? '<i data-lucide="users" style="width: 14px; height: 14px; vertical-align: middle;"></i> Social' :
+                                        '<i data-lucide="heart" style="width: 14px; height: 14px; vertical-align: middle;"></i> Developing'}
                                     </div>
                                 ` : ''}
                             </div>
                             
-                            ${event.notes ? `
+                            ${routeInfo.notes ? `
                                 <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.5;">
-                                    ${event.notes.substring(0, 100)}${event.notes.length > 100 ? '...' : ''}
+                                    ${routeInfo.notes.substring(0, 100)}${routeInfo.notes.length > 100 ? '...' : ''}
                                 </div>
                             ` : ''}
                             
@@ -808,10 +1005,10 @@
             }
 
             const paceEmojis = {
-                elite: '🔥',
-                advanced: '💪',
-                intermediate: '🌊',
-                beginner: '🏊'
+                fast: 'zap',
+                steady: 'trending-up',
+                social: 'users',
+                developing: 'heart'
             };
 
             const paceLabels = {
@@ -829,7 +1026,8 @@
 
                 const spotName = event.spot?.name || 'Unknown Location';
                 const creatorName = event.creator?.display_name || 'Anonymous';
-                const paceEmoji = paceEmojis[event.pace_level] || '🏊';
+                const paceIcon = paceEmojis[event.pace_level] || 'users';
+                const paceHtml = `<i data-lucide="${paceIcon}" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>`;
                 const paceLabel = paceLabels[event.pace_level] || event.pace_level;
 
                 const confirmed = event.memberCount?.confirmed || 0;
@@ -905,13 +1103,15 @@
             const spot = spots.find(s => s.id === spotId);
             const locationName = spot ? spot.name : spotSelect?.options[spotSelect.selectedIndex]?.text;
 
-            // Convert pace level to seconds per 100m
-            const paceMap = {
-                'elite': 100,      // <1:45 = ~100 sec/100m
-                'advanced': 120,   // 1:45-2:15 = ~120 sec/100m  
-                'intermediate': 150, // 2:15-2:45 = ~150 sec/100m
-                'beginner': 180    // >2:45 = ~180 sec/100m
-            };
+            // Pace level is now stored directly as integer (no mapping needed)
+            const targetPace = parseInt(paceLevel, 10);
+
+            // Handle Route Type persistence in notes
+            const routeType = document.getElementById('eventRouteType')?.value;
+            let finalNotes = notes || '';
+            if (routeType) {
+                finalNotes = `Route: ${routeType}${finalNotes ? ' | ' + finalNotes : ''}`;
+            }
 
             const eventData = {
                 created_by: currentUser.id,
@@ -921,15 +1121,15 @@
                 lat: spot?.latitude || null,
                 lng: spot?.longitude || null,
                 distance_km: distanceKm,
-                target_pace_sec_per_100m: paceMap[paceLevel] || 150,
+                target_pace_sec_per_100m: targetPace,
                 suit: null,  // Optional - removed requirement
                 visibility: 'open',  // Valid values: 'open' or 'invite_only'
-                notes: notes,
+                notes: finalNotes,
                 status: 'planned',
                 category: 'open'
             };
 
-            console.log('Creating event:', eventData);
+            console.log('CREATE_SWIM payload', eventData);
 
             const { data, error } = await supabaseClient
                 .from('swim_events')
@@ -961,7 +1161,7 @@
             }
 
 
-            alert('🎉 Swim created successfully!');
+            showToast('Swim created successfully!', 'success');
             hideCreateEvent();
             loadEvents();
         }
@@ -1002,7 +1202,7 @@
 
                 // Show success message
                 if (rsvpStatus === 'yes') {
-                    alert('🎉 You\'re going! See you there!');
+                    showToast("You're going! See you there!", 'success');
                 } else {
                     alert('👍 Marked as maybe. You can confirm later.');
                 }
@@ -1023,6 +1223,7 @@
 
         // View event details (wrapper for compatibility)
         async function viewEventDetails(eventId) {
+            showPage('events');
             await showEventDetails(eventId);
         }
 
@@ -1140,12 +1341,25 @@
                         </div>
                     ` : ''}
                     
-                    ${event.notes ? `
-                        <div>
-                            <span style="color: var(--text-secondary); font-size: 13px;">📝 DETAILS</span>
-                            <div style="color: var(--text-primary); font-size: 14px; margin-top: 4px; line-height: 1.6;">${event.notes}</div>
-                        </div>
-                    ` : ''}
+                    ${(function () {
+                    const routeInfo = parseRouteFromNotes(event.notes);
+                    return routeInfo.route ? `
+                            <div style="margin-bottom: 12px;">
+                                <span style="color: var(--text-secondary); font-size: 13px;"><i data-lucide="repeat" style="width: 14px; height: 14px; vertical-align: middle;"></i> ROUTE TYPE</span>
+                                <div style="color: var(--text-primary); font-size: 16px; font-weight: 600; margin-top: 4px;">${routeInfo.route}</div>
+                            </div>
+                        ` : '';
+                })()}
+                    
+                    ${(function () {
+                    const routeInfo = parseRouteFromNotes(event.notes);
+                    return routeInfo.notes ? `
+                            <div>
+                                <span style="color: var(--text-secondary); font-size: 13px;">DETAILS</span>
+                                <div style="color: var(--text-primary); font-size: 14px; margin-top: 4px; line-height: 1.6;">${routeInfo.notes}</div>
+                            </div>
+                        ` : '';
+                })()}
                 </div>
                 
                 <div style="background: rgba(56, 189, 248, 0.1); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
@@ -1183,7 +1397,7 @@
 
             if (event.userRsvp === 'yes') {
                 container.innerHTML = `
-                    <button class="btn" style="background: var(--success);" disabled>✓ You're Going</button>
+                    <button class="btn" style="background: var(--success);" disabled><i data-lucide="check" style="width: 14px; height: 14px; vertical-align: middle;"></i> You're Going</button>
                     <button class="btn" style="background: transparent; border: 2px solid var(--danger); color: var(--danger); margin-top: 10px;" onclick="leaveEvent('${event.id}')">Leave Swim</button>
                 `;
             } else if (event.userRsvp === 'maybe') {
@@ -1261,7 +1475,7 @@
                     console.log('Modal not open, skipping refresh');
                 }
 
-                showToast(rsvp === 'yes' ? '🎉 You\'re in!' : '👍 Marked as maybe', 'success');
+                showToast(rsvp === 'yes' ? "You're in!" : 'Marked as maybe', 'success');
 
                 loadEvents(); // Refresh list
                 loadDashboard(); // Refresh dashboard
@@ -1283,7 +1497,7 @@
 
                 if (error) throw error;
 
-                showToast('👋 You\'ve left the swim', 'info');
+                showToast('You\'ve left the swim', 'info');
 
                 // Refresh event details modal if it's open
                 const modal = document.getElementById('eventDetailsModal');
@@ -1348,7 +1562,7 @@
 
                 // For now, we'll just show a toast
                 // In future, we could store this in a 'status' field or send notifications
-                showToast(`⏰ Marked as ${label}. Others will be notified!`, 'info');
+                showToast(`Marked as ${label}. Others will be notified!`, 'info');
 
                 // Could add: Update database with status
                 // Could add: Send notification to other participants
@@ -1387,7 +1601,31 @@
 
         // ========== PROFILE SETTINGS ==========
 
+        // Global to store profile being edited
+        let editingProfile = null;
+        // Avatar options (ocean-themed Lucide icons)
+        const AVATARS = [
+            { icon: 'anchor', color: '#3b82f6', name: 'Anchor' },
+            { icon: 'waves', color: '#06b6d4', name: 'Waves' },
+            { icon: 'compass', color: '#10b981', name: 'Compass' },
+            { icon: 'ship', color: '#f59e0b', name: 'Ship' },
+            { icon: 'sailboat', color: '#ef4444', name: 'Sailboat' },
+            { icon: 'fish', color: '#8b5cf6', name: 'Fish' },
+            { icon: 'droplets', color: '#ec4899', name: 'Droplets' },
+            { icon: 'gem', color: '#14b8a6', name: 'Gem' },
+            { icon: 'zap', color: '#6366f1', name: 'Lightning' },
+            { icon: 'flame', color: '#f97316', name: 'Flame' },
+            { icon: 'star', color: '#84cc16', name: 'Star' },
+            { icon: 'trophy', color: '#06b6d4', name: 'Trophy' },
+            { icon: 'shield', color: '#0ea5e9', name: 'Shield' },
+            { icon: 'target', color: '#22c55e', name: 'Target' },
+            { icon: 'award', color: '#a855f7', name: 'Award' },
+            { icon: 'crown', color: '#f43f5e', name: 'Crown' }
+        ];
+
         async function showProfileSettings() {
+            // Instant open
+            console.log('OPEN_PROFILE');
             document.getElementById('profileModal').style.display = 'block';
             document.getElementById('profileEmail').textContent = currentUser.email;
 
@@ -1400,26 +1638,82 @@
                     .single();
 
                 if (profile) {
+                    editingProfile = profile;
+                    selectedAvatar = profile.avatar_url;
+
                     document.getElementById('profileDisplayName').value = profile.display_name || '';
                     document.getElementById('profileHomeBeach').value = profile.home_beach_id || '';
+                    document.getElementById('profilePreferredSuit').value = profile.preferred_suit || 'both';
                     document.getElementById('profileColdTolerance').value = profile.cold_tolerance_min_c || '';
 
-                    // Convert seconds to mm:ss format
+                    // Times
                     if (profile.pool_1km_time_seconds) {
                         const mins = Math.floor(profile.pool_1km_time_seconds / 60);
                         const secs = profile.pool_1km_time_seconds % 60;
                         document.getElementById('profilePoolTime').value = `${mins}:${secs.toString().padStart(2, '0')}`;
+                    } else {
+                        document.getElementById('profilePoolTime').value = '';
                     }
 
                     if (profile.ocean_1km_time_seconds) {
                         const mins = Math.floor(profile.ocean_1km_time_seconds / 60);
                         const secs = profile.ocean_1km_time_seconds % 60;
                         document.getElementById('profileOceanTime').value = `${mins}:${secs.toString().padStart(2, '0')}`;
+                    } else {
+                        document.getElementById('profileOceanTime').value = '';
                     }
                 }
+
+                renderAvatarGrid();
             } catch (err) {
                 console.error('Error loading profile:', err);
             }
+        }
+
+        function renderAvatarGrid() {
+            const grid = document.getElementById('avatarGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            AVATARS.forEach(avatar => {
+                const div = document.createElement('div');
+                const isSelected = selectedAvatar === avatar.icon;
+                div.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
+                    cursor: pointer;
+                    padding: 18px;
+                    border-radius: 14px;
+                    background: ${avatar.color};
+                    opacity: ${isSelected ? '1' : '0.75'};
+                    border: 3px solid ${isSelected ? 'white' : 'transparent'};
+                    transition: all 0.2s;
+                    box-shadow: ${isSelected ? '0 6px 16px rgba(0,0,0,0.35)' : '0 2px 8px rgba(0,0,0,0.15)'};
+                    transform: ${isSelected ? 'scale(1.05)' : 'scale(1)'};
+                `;
+                div.innerHTML = `<i data-lucide="${avatar.icon}" style="width: 28px; height: 28px; color: white;"></i>`;
+                div.title = avatar.name;
+                div.onmouseenter = () => {
+                    if (!isSelected) {
+                        div.style.opacity = '0.9';
+                        div.style.transform = 'scale(1.05)';
+                    }
+                };
+                div.onmouseleave = () => {
+                    if (!isSelected) {
+                        div.style.opacity = '0.75';
+                        div.style.transform = 'scale(1)';
+                    }
+                };
+                div.onclick = () => {
+                    selectedAvatar = avatar.icon;
+                    renderAvatarGrid();
+                };
+                grid.appendChild(div);
+            });
+            initIcons(); // Re-initialize Lucide icons
         }
 
         function hideProfileSettings() {
@@ -1429,42 +1723,82 @@
         async function saveProfile() {
             const displayName = document.getElementById('profileDisplayName').value;
             const homeBeachId = document.getElementById('profileHomeBeach').value;
+            const preferredSuit = document.getElementById('profilePreferredSuit').value;
             const coldTolerance = document.getElementById('profileColdTolerance').value;
-            const poolTime = document.getElementById('profilePoolTime').value;
-            const oceanTime = document.getElementById('profileOceanTime').value;
+            const poolTimeStr = document.getElementById('profilePoolTime').value;
+            const oceanTimeStr = document.getElementById('profileOceanTime').value;
 
             if (!displayName) {
                 alert('Please enter a display name');
                 return;
             }
 
-            // Convert mm:ss to seconds
-            const parseTime = (timeStr) => {
-                if (!timeStr) return null;
-                const parts = timeStr.split(':');
-                if (parts.length !== 2) return null;
-                return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+            // Helper: mm:ss OR raw seconds to integer seconds (Tolerant)
+            const mmssToSeconds = (val) => {
+                if (!val) return null;
+                const s = String(val).trim();
+                if (!s) return null;
+
+                // Normalize separators: dots, spaces, semicolons -> colon
+                const normalized = s.replace(/[.;\s]+/g, ':');
+
+                // If digits only
+                if (/^\d+$/.test(normalized)) return parseInt(normalized, 10);
+
+                // If mm:ss
+                const parts = normalized.split(':');
+                if (parts.length === 2) {
+                    const m = parseInt(parts[0], 10) || 0;
+                    const sc = parseInt(parts[1], 10) || 0;
+                    // Basic validation: seconds should be < 60
+                    if (sc >= 60) return null;
+                    return m * 60 + sc;
+                }
+                return null;
             };
 
-            const profileData = {
+            // Derive Tier
+            const poolTierFromSeconds = (poolSec) => {
+                if (poolSec == null) return null;
+                if (poolSec < 870) return "fast";
+                if (poolSec <= 989) return "steady";
+                if (poolSec <= 1140) return "social";
+                return "developing";
+            };
+
+            const poolSeconds = mmssToSeconds(poolTimeStr);
+            const oceanSeconds = mmssToSeconds(oceanTimeStr);
+            const experienceLevel = poolTierFromSeconds(poolSeconds);
+
+            const payload = {
                 display_name: displayName,
                 home_beach_id: homeBeachId || null,
+                preferred_suit: preferredSuit,
                 cold_tolerance_min_c: coldTolerance ? parseFloat(coldTolerance) : null,
-                pool_1km_time_seconds: parseTime(poolTime),
-                ocean_1km_time_seconds: parseTime(oceanTime)
+                pool_1km_time_seconds: poolSeconds,
+                ocean_1km_time_seconds: oceanSeconds,
+                experience_level: experienceLevel,
+                avatar_url: selectedAvatar
             };
+
+            // Onboarding check
+            if (editingProfile && !editingProfile.onboarding_completed_at) {
+                payload.onboarding_completed_at = new Date().toISOString();
+            }
+
+            console.log("PROFILE SAVE PAYLOAD", payload);
 
             try {
                 const { error } = await supabaseClient
                     .from('profiles')
-                    .update(profileData)
+                    .update(payload)
                     .eq('id', currentUser.id);
 
                 if (error) throw error;
 
-                showToast('✅ Profile updated!', 'success');
+                showToast('Profile updated!', 'success');
                 hideProfileSettings();
-                loadDashboard(); // Refresh dashboard
+                loadDashboard();
             } catch (err) {
                 console.error('Error saving profile:', err);
                 alert('Error saving profile: ' + err.message);
@@ -1610,7 +1944,9 @@
             waiver: {
                 title: 'Liability Waiver',
                 content: `
-<h4 style="color: #ef4444; margin-bottom: 12px;">⚠️ LIABILITY WAIVER AND ASSUMPTION OF RISK</h4>
+<h4 style="color: #ef4444; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="alert-triangle" style="width: 18px; height: 18px;"></i> LIABILITY WAIVER AND ASSUMPTION OF RISK
+                    </h4>
 <p><strong>PLEASE READ CAREFULLY BEFORE ACCEPTING</strong></p>
 
 <h4 style="color: #f8fafc; margin: 16px 0 8px 0;">ACKNOWLEDGMENT OF RISKS</h4>
@@ -1648,7 +1984,9 @@
 <h4 style="color: #f8fafc; margin: 16px 0 8px 0;">INDEMNIFICATION</h4>
 <p>I agree to indemnify and hold harmless SwimLoading from any claims, damages, or expenses arising from my swimming activities or use of the app.</p>
 
-<h4 style="color: #ef4444; margin: 16px 0 8px 0;">⚠️ BY ACCEPTING, I CONFIRM THAT:</h4>
+<h4 style="color: #ef4444; margin: 16px 0 8px 0; display: flex; align-items: center; gap: 8px;">
+    <i data-lucide="alert-triangle" style="width: 18px; height: 18px;"></i> BY ACCEPTING, I CONFIRM THAT:
+</h4>
 <ul style="margin: 8px 0 8px 20px;">
 <li>I have read and understood this waiver</li>
 <li>I am at least 18 years old (or have parental consent)</li>
@@ -1944,7 +2282,7 @@
         async function submitTempLog() {
             const spotId = document.querySelector('#logTemp select[data-spots]').value;
             const temp = parseFloat(document.getElementById('tempValue').textContent);
-            const conditionsRaw = document.querySelector('#logTemp .toggle-btn.active')?.textContent.trim() || '😌 Calm';
+            const conditionsRaw = document.querySelector('#logTemp .toggle-btn.active')?.textContent.trim() || 'Calm';
 
             // Remove emojis and extract just the word (calm, choppy, rough, extreme)
             const conditions = conditionsRaw.replace(/[^\w\s]/g, '').trim().toLowerCase();
@@ -1992,7 +2330,7 @@
                 alert('Error logging temperature: ' + error.message);
                 console.error(error);
             } else {
-                alert('🎉 Temperature logged successfully!\n\n+10 points!\n\nKeep up the streak! 🔥');
+                showToast('Temperature logged successfully! +10 points!', 'success');
 
                 // Reset GPS and Lock state
                 selectedSpotLocked = false;
@@ -2242,22 +2580,58 @@
             font-size: 18px;
             cursor: pointer;
             border: 2px solid var(--ocean-light);
+            position: relative;
+            z-index: 200;
+            pointer-events: auto;
+            /* Ensure it is above any headers or overlays */
         }
 
         .nav-tabs {
-            display: flex;
+            display: inline-flex;
+            /* Fix desktop overflow: grow with content */
+            flex-wrap: nowrap;
+            /* Prevent wrapping on desktop */
+            overflow-x: auto;
+            /* Allow scroll if it doesn't fit */
+            max-width: 100%;
+            /* Ensure it doesn't overflow parent */
+            min-width: 100%;
+            /* Ensure it takes full width if content is small (pill style) */
+            box-sizing: border-box;
             gap: 8px;
-            margin-bottom: 24px;
+            /* margin-bottom handled by wrapper */
             background: rgba(30, 41, 59, 0.6);
             backdrop-filter: blur(20px);
             padding: 6px;
             border-radius: 16px;
             border: 1px solid var(--border);
+            /* Position sticky handled by wrapper */
+        }
+
+        /* Wrapper for sticky positioning and positioning context for fade */
+        .nav-wrapper {
             position: sticky;
             top: 20px;
             z-index: 100;
+            margin-bottom: 24px;
+            position: relative;
+            /* For absolute fade positioning */
         }
 
+        .nav-fade {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 40px;
+            background: linear-gradient(to right, transparent, rgba(15, 23, 42, 0.9));
+            pointer-events: none;
+            border-top-right-radius: 16px;
+            border-bottom-right-radius: 16px;
+            transition: opacity 0.3s ease;
+            display: none;
+            /* Hidden by default on desktop */
+        }
 
         .nav-tabs::-webkit-scrollbar {
             display: none;
@@ -2276,6 +2650,8 @@
             cursor: pointer;
             transition: all 0.3s;
             text-align: center;
+            white-space: nowrap;
+            /* Prevent wrapping on desktop too */
         }
 
         .nav-tab.active {
@@ -2283,28 +2659,51 @@
             color: white;
             box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
         }
-        @media (max-width: 520px) {
-          .nav-tabs {
-            flex-wrap: wrap;
-            gap: 6px;
-          }
-        }
 
-        @media (max-width: 480px) {
-          .nav-tab {
-            flex: 1 1 30%;
-            min-width: 0;
-            padding: 10px 8px;
-            font-size: 13px;
-          }
-        }
+        /* Mobile nav: single row, swipeable, never wraps */
+        @media (max-width: 520px) {
+            .nav-wrapper {
+                overflow: hidden;
+                /* Clip anything outside */
+                border-radius: 16px;
+                /* Match nav radius */
+            }
+
+            .nav-tabs {
+                display: flex;
+                width: 100%;
+                /* Reset inline-flex for mobile */
+                flex-wrap: nowrap !important;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                gap: 2px;
+                padding-right: 12px;
+                /* prevents margin issues */
+                margin-bottom: 0;
+                /* Wrapper handles margin */
+                border: none;
+                background: rgba(30, 41, 59, 0.6);
+                backdrop-filter: blur(20px);
+                border: 1px solid var(--border);
+            }
+
+            .nav-fade {
+                display: block;
+                /* Show on mobile */
+            }
+
+            .nav-tabs::-webkit-scrollbar {
+                display: none;
+            }
+
             .nav-tab {
-                flex: 1 1 30%;
-                min-width: 0;
-                padding: 10px 8px;
-                font-size: 13px;
+                flex: 0 0 auto !important;
+                white-space: nowrap;
+                padding: 8px 4px;
+                font-size: 12px;
             }
         }
+
 
         .page {
             display: none;
@@ -2414,24 +2813,64 @@
             gap: 12px;
         }
 
+        select {
+            appearance: none;
+            background: rgba(15, 23, 42, 0.8) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 16px center;
+            background-size: 18px;
+            border: 2px solid rgba(56, 189, 248, 0.15);
+            border-radius: 12px;
+            color: white;
+            padding: 14px 18px;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        select:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+            background-color: rgba(15, 23, 42, 0.9);
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--ocean-light);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+        }
+
         .toggle-btn {
-            padding: 16px;
+            padding: 14px 20px;
             background: rgba(15, 23, 42, 0.6);
             border: 2px solid rgba(56, 189, 248, 0.2);
             border-radius: 12px;
-            color: var(--text-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             font-size: 14px;
             font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
             text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: rgba(56, 189, 248, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
         }
 
         .toggle-btn.active {
-            background: linear-gradient(135deg, var(--ocean-blue) 0%, var(--ocean-dark) 100%);
-            border-color: var(--ocean-blue);
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.5) 0%, rgba(6, 182, 212, 0.5) 100%);
+            border-color: var(--ocean-light);
             color: white;
-            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            transform: scale(1.02);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
         }
 
         textarea {
@@ -2628,7 +3067,7 @@
                             <label for="obWaiver" style="cursor: pointer;">
                                 <div
                                     style="color: #cbd5e1; font-size: 12px; font-family: system-ui, -apple-system, sans-serif;">
-                                    ⚠️ Ocean swimming is dangerous. I may be seriously injured or killed. SwimLoading
+                                    Ocean swimming is dangerous. I may be seriously injured or killed. SwimLoading
                                     assumes ZERO liability.</div>
                             </label>
                         </div>
@@ -2791,46 +3230,25 @@
                         <button class="btn"
                             style="padding: 8px 16px; font-size: 13px; background: transparent; border: 1px solid var(--danger); color: var(--danger);"
                             onclick="signOut()">Logout</button>
-                        <div class="user-avatar" onclick="showProfileSettings()" title="Profile Settings">👤</div>
+                        <div class="user-avatar" onclick="console.log('AVATAR_CLICK'); showProfileSettings()"
+                            title="Profile Settings"><i data-lucide="user" style="width: 18px; height: 18px;"></i></div>
                     </div>
                 </div>
             </div>
 
-            <div class="nav-tabs">
-                <button class="nav-tab active" onclick="showPage('dashboard')">Dashboard</button>
-                <button class="nav-tab" onclick="showPage('logTemp')">Log Temp</button>
-                <button class="nav-tab" onclick="showPage('history')">History</button>
-                <button class="nav-tab" onclick="showPage('safety')">Safety</button>
-                <button class="nav-tab" onclick="showPage('events')">Swims</button>
-                <button class="nav-tab" onclick="showPage('leaderboard')">Leaderboard</button>
+            <div class="nav-wrapper">
+                <div class="nav-tabs">
+                    <button class="nav-tab active" onclick="showPage('dashboard')">Home</button>
+                    <button class="nav-tab" onclick="showPage('logTemp')">Temps</button>
+                    <button class="nav-tab" onclick="showPage('events')">Swims</button>
+                    <button class="nav-tab" onclick="showPage('history')">Trends</button>
+                    <button class="nav-tab" onclick="showPage('safety')">Safety</button>
+                    <button class="nav-tab" onclick="showPage('leaderboard')">Leaderboard</button>
+                </div>
+                <div class="nav-fade"></div>
             </div>
 
-            <style>
-                @media (max-width: 520px) {
-                    .nav-tabs {
-                        flex-wrap: wrap;
-                        overflow-x: visible;
-                        /* Disable scrolling */
-                        height: auto;
-                        gap: 8px;
-                        /* Slightly reduce gap */
-                        margin-bottom: 12px;
-                    }
 
-                    .nav-tab {
-                        flex: 1 1 30%;
-                        /* Force 3 items per row */
-                        padding: 8px 4px;
-                        font-size: 12px;
-                        white-space: normal;
-                        /* Allow text wrapping within button if needed */
-                        text-align: center;
-                        justify-content: center;
-                        min-width: unset;
-                        /* Remove min-width if existent */
-                    }
-                }
-            </style>
 
             <!-- DASHBOARD -->
             <div id="dashboard" class="page active">
@@ -2898,7 +3316,9 @@
                     </div>
 
                     <div class="form-group">
-                        <div class="form-label">🌡️ Water Temperature</div>
+                        <div class="form-label"><i data-lucide="thermometer"
+                                style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i> Water
+                            Temperature</div>
                         <div class="slider-value" id="tempValue">14°C</div>
                         <input type="range" id="tempSlider" min="8" max="25" value="14" step="0.5"
                             oninput="document.getElementById('tempValue').textContent = this.value + '°C'">
@@ -2909,33 +3329,50 @@
                     </div>
 
                     <div class="form-group">
-                        <div class="form-label">🌊 Conditions</div>
+                        <div class="form-label"><i data-lucide="waves"
+                                style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>
+                            Conditions</div>
                         <div class="toggle-group">
-                            <div class="toggle-btn active" onclick="toggleSingle(this)">😌 Calm</div>
-                            <div class="toggle-btn" onclick="toggleSingle(this)">🌊 Choppy</div>
-                            <div class="toggle-btn" onclick="toggleSingle(this)">⚠️ Rough</div>
-                            <div class="toggle-btn" onclick="toggleSingle(this)">⛈️ Extreme</div>
+                            <div class="toggle-btn active" onclick="toggleSingle(this)"><i data-lucide="sun"
+                                    style="width: 18px; height: 18px; vertical-align: middle;"></i> Calm</div>
+                            <div class="toggle-btn" onclick="toggleSingle(this)"><i data-lucide="waves"
+                                    style="width: 18px; height: 18px; vertical-align: middle;"></i> Choppy</div>
+                            <div class="toggle-btn" onclick="toggleSingle(this)"><i data-lucide="wind"
+                                    style="width: 18px; height: 18px; vertical-align: middle;"></i> Rough</div>
+                            <div class="toggle-btn" onclick="toggleSingle(this)"><i data-lucide="cloud-lightning"
+                                    style="width: 18px; height: 18px; vertical-align: middle;"></i> Extreme</div>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <div class="form-label">⚠️ Hazards (Optional)</div>
+                        <div class="form-label"><i data-lucide="shield-alert"
+                                style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>
+                            Hazards (Optional)</div>
                         <div class="toggle-group">
-                            <div class="toggle-btn" onclick="this.classList.toggle('active')">🪼 Jellyfish</div>
-                            <div class="toggle-btn" onclick="this.classList.toggle('active')">🦭 Seals</div>
-                            <div class="toggle-btn" onclick="this.classList.toggle('active')">🦈 Shark</div>
+                            <div class="toggle-btn" onclick="this.classList.toggle('active')"><i data-lucide="droplet"
+                                    style="width: 18px; height: 18px; vertical-align: middle;"></i> Jellyfish</div>
+                            <div class="toggle-btn" onclick="this.classList.toggle('active')"><i
+                                    data-lucide="circle-dot"
+                                    style="width: 18px; height: 18px; vertical-align: middle;"></i> Seals</div>
+                            <div class="toggle-btn" onclick="this.classList.toggle('active')"><i
+                                    data-lucide="alert-triangle"
+                                    style="width: 18px; height: 18px; vertical-align: middle;"></i> Shark</div>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <div class="form-label">📝 Notes</div>
+                        <div class="form-label"><i data-lucide="file-text"
+                                style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i> Notes
+                        </div>
                         <textarea placeholder="Visibility, currents, etc..."></textarea>
                     </div>
 
                     <button class="btn btn-success" onclick="submitTempLog()">Submit Temperature Log</button>
 
                     <div class="info-box">
-                        <strong>📊 Live Database!</strong>
+                        <i data-lucide="database"
+                            style="width: 16px; height: 16px; vertical-align: middle; color: var(--ocean-light); margin-right: 4px;"></i>
+                        <strong>Live Database!</strong>
                         This will save to YOUR Supabase database in real-time!
                     </div>
                 </div>
@@ -2944,7 +3381,7 @@
             <!-- HISTORY & TRENDS -->
             <div id="history" class="page">
                 <div class="card">
-                    <div class="card-title">Temperature History & Trends</div>
+                    <div class="card-title">Temperature Trends</div>
 
                     <div class="form-group">
                         <div class="form-label"><i data-lucide="map-pin"
@@ -2998,13 +3435,17 @@
                     </div>
 
                     <div class="form-group">
-                        <div class="form-label">🏊 Pace Level</div>
+                        <div class="form-label">Pace Level</div>
                         <select id="eventPaceFilter" onchange="loadEvents()">
                             <option value="">All Levels</option>
-                            <option value="elite">🔥 Elite (&lt;1:45/100m)</option>
-                            <option value="advanced">💪 Advanced (1:45-2:15/100m)</option>
-                            <option value="intermediate">🌊 Intermediate (2:15-2:45/100m)</option>
-                            <option value="beginner">🏊 Beginner (&gt;2:45/100m)</option>
+                            <option value="100">Fast (1:40/100m)
+                            </option>
+                            <option value="120">Steady (2:00/100m)
+                            </option>
+                            <option value="150">Social (2:30/100m)
+                            </option>
+                            <option value="180">Developing
+                                (3:00/100m)</option>
                         </select>
                     </div>
 
@@ -3031,8 +3472,11 @@
                         <!-- Safety Disclaimer -->
                         <div
                             style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-                            <div style="font-weight: 600; color: var(--danger); margin-bottom: 8px;">⚠️ Important Safety
-                                Notice</div>
+                            <div
+                                style="font-weight: 600; color: var(--danger); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="alert-triangle" style="width: 18px; height: 18px;"></i> Important Safety
+                                Note
+                            </div>
                             <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
                                 Open water swimming is inherently dangerous. By creating or joining a swim, you
                                 acknowledge that:
@@ -3058,6 +3502,14 @@
                             </div>
 
                             <div class="form-group">
+                                <div class="form-label">Route Type</div>
+                                <select id="eventRouteType">
+                                    <option value="Out & Back">Out & Back</option>
+                                    <option value="Point-to-Point (lifts needed)">Point-to-Point (lifts needed)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
                                 <div class="form-label"><i data-lucide="calendar"
                                         style="width: 14px; height: 14px; vertical-align: middle;"></i> Date & Time
                                 </div>
@@ -3065,13 +3517,12 @@
                             </div>
 
                             <div class="form-group">
-                                <div class="form-label">🏊 Pace Category</div>
+                                <div class="form-label">Pace Category</div>
                                 <select id="eventPaceLevel" required>
-                                    <option value="elite">🔥 Elite (&lt;1:45/100m) - Experienced only</option>
-                                    <option value="advanced">💪 Advanced (1:45-2:15/100m) - Strong swimmers</option>
-                                    <option value="intermediate" selected>🌊 Intermediate (2:15-2:45/100m) - Comfortable
-                                        in open water</option>
-                                    <option value="beginner">🏊 Beginner (&gt;2:45/100m) - New to open water</option>
+                                    <option value="100">Fast (1:40/100m)</option>
+                                    <option value="120">Steady (2:00/100m)</option>
+                                    <option value="150" selected>Social (2:30/100m)</option>
+                                    <option value="180">Developing (3:00/100m)</option>
                                 </select>
                             </div>
 
@@ -3091,7 +3542,7 @@
                             </div>
 
                             <div class="form-group">
-                                <div class="form-label">📝 Description / Route</div>
+                                <div class="form-label">Description / Route</div>
                                 <textarea id="eventDescription"
                                     placeholder="Describe the route, meeting point, any special notes..."
                                     rows="4"></textarea>
@@ -3141,9 +3592,10 @@
                         </div>
 
                         <div style="text-align: center; margin-bottom: 24px;">
-                            <div
-                                style="width: 80px; height: 80px; border-radius: 50%; background: var(--ocean-blue); display: inline-flex; align-items: center; justify-content: center; font-size: 36px; margin-bottom: 12px;">
-                                👤
+                            <div class="form-label" style="text-align:center; margin-bottom:8px;">Choose Avatar</div>
+                            <div id="avatarGrid"
+                                style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 20px;">
+                                <!-- Populated by JS -->
                             </div>
                             <div style="color: var(--text-primary); font-weight: 600;" id="profileEmail"></div>
                         </div>
@@ -3154,19 +3606,30 @@
                         </div>
 
                         <div class="form-group">
+                            <div class="form-label">Preferred Suit</div>
+                            <select id="profilePreferredSuit">
+                                <option value="skins">Skins (No Wetsuit)</option>
+                                <option value="wetsuit">Wetsuit</option>
+                                <option value="both">Both</option>
+                            </select>
+                        </div>
+
+
+
+                        <div class="form-group">
                             <div class="form-label">🏖️ Home Beach</div>
                             <select id="profileHomeBeach" data-spots></select>
                         </div>
 
                         <div class="form-group">
-                            <div class="form-label">🏊 Pool 1km Time (optional)</div>
+                            <div class="form-label">Pool 1km Time (optional)</div>
                             <input type="text" id="profilePoolTime" placeholder="e.g., 18:30 (mm:ss)">
                             <small style="color: var(--text-secondary); font-size: 11px;">Helps match you with
                                 appropriate pace groups</small>
                         </div>
 
                         <div class="form-group">
-                            <div class="form-label">🌊 Ocean 1km Time (optional)</div>
+                            <div class="form-label">Ocean 1km Time (optional)</div>
                             <input type="text" id="profileOceanTime" placeholder="e.g., 21:00 (mm:ss)">
                         </div>
 
@@ -3198,7 +3661,7 @@
                         style="background: rgba(15, 23, 42, 0.6); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
                         <div
                             style="font-weight: 700; color: var(--text-primary); margin-bottom: 16px; font-size: 18px;">
-                            🦈 Marine Life</div>
+                            Marine Life</div>
                         <div style="color: var(--text-secondary); line-height: 1.7; font-size: 14px;">
                             <ul style="margin: 0 0 0 20px; padding: 0;">
                                 <li style="margin-bottom: 8px;"><strong
