@@ -1,4 +1,10 @@
-
-# local-only
+# Local / system
+.DS_Store
+.vercel
 Backups/
+Deploy_SwimLoading/
+archive/
 Supabase Snippet Spots directory sorted by name 2.numbers
+
+# Node
+node_modules/
